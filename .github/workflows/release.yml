@@ -1,0 +1,206 @@
+name: Build and release QLTK
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release tag
+        shell: powershell
+        run: |
+          if ($env:GITHUB_REF_NAME -notmatch '^v([1-9][0-9]{0,8})$') { throw 'Run this workflow on a version tag such as v209' }
+          "QLTK_VERSION=$($Matches[1])" >> $env:GITHUB_ENV
+      - name: Windows Forms regression checks
+        shell: powershell
+        run: powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File QLTK/AccountManager.ps1 -UiTest
+      - name: Manager status change checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /out:ManagerStatusCacheTests.exe (Join-Path $pwd 'QLTK/ManagerStatusCache.cs') (Join-Path $pwd 'QLTK/ManagerStatusCacheTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Manager status cache compilation failed'}
+          ./ManagerStatusCacheTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Manager status cache tests failed'}
+      - name: Native combat target checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:QuestTargetNativeTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/QuestTargetNativeTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Native test compilation failed'}
+          ./QuestTargetNativeTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Native target tests failed'}
+      - name: Gem level 12 at 100 percent checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:GemCombineTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/GemCombineTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Gem test compilation failed'}
+          ./GemCombineTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Gem combine tests failed'}
+      - name: Online notice confirmation checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:OnlineNoticeTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/OnlineNoticeTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Online notice test compilation failed'}
+          ./OnlineNoticeTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Online notice tests failed'}
+      - name: Beast solo quest checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:BeastQuestTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/BeastQuestTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Beast test compilation failed'}
+          ./BeastQuestTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Beast tests failed'}
+      - name: Dungeon entry and key exhaustion checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:DungeonEntryTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/DungeonEntryTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Dungeon entry test compilation failed'}
+          ./DungeonEntryTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Dungeon entry tests failed'}
+      - name: Inventory count persistence checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:BiMaTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/BiMaTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'BiMa test compilation failed'}
+          ./BiMaTests.exe
+          if($LASTEXITCODE -ne 0){throw 'BiMa tests failed'}
+      - name: Activity timeout recovery checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:ActivityWatchdogTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/ActivityWatchdogTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Watchdog test compilation failed'}
+          ./ActivityWatchdogTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Watchdog tests failed'}
+      - name: Failed startup cleanup recovery checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:FailedLaunchCleanupTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/FailedLaunchCleanupTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Failed startup cleanup test compilation failed'}
+          ./FailedLaunchCleanupTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Failed startup cleanup tests failed'}
+      - name: Mail receive-delete backpressure and native packet checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          foreach($name in @('MailTests','InboxReuseTests','InboxFlowTests')){
+            & $compiler /nologo /platform:x64 /out:$($name+'.exe') (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd ('QLTK/'+$name+'.cs'))
+            if($LASTEXITCODE -ne 0){throw ($name+' compilation failed')}
+            & (Join-Path $pwd ($name+'.exe'))
+            if($LASTEXITCODE -ne 0){throw ($name+' failed')}
+          }
+      - name: Farm villages and explicit zone checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:FarmDestinationTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/FarmDestinationTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Farm destination test compilation failed'}
+          ./FarmDestinationTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Farm destination tests failed'}
+      - name: Cuong Thi real HP and hanging threshold checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:CuongThiTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/CuongThiTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Cuong Thi test compilation failed'}
+          ./CuongThiTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Cuong Thi tests failed'}
+      - name: Cuong Thi independent navigation checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:CuongThiMovementTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/CuongThiMovementTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Cuong Thi movement compilation failed'}
+          ./CuongThiMovementTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Cuong Thi movement tests failed'}
+      - name: HTTP CONNECT proxy checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:ProxyHttpTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/ProxyHttpTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'HTTP proxy compilation failed'}
+          ./ProxyHttpTests.exe
+          if($LASTEXITCODE -ne 0){throw 'HTTP proxy checks failed'}
+      - name: Native captcha input guards
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:CaptchaTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/CaptchaTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Captcha test compilation failed'}
+          ./CaptchaTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Captcha tests failed'}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Local OCR review portal checks
+        shell: powershell
+        run: |
+          python QLTK/OcrPortalTests.py
+          if($LASTEXITCODE -ne 0){throw 'OCR portal tests failed'}
+      - name: Build portable OCR runtime
+        shell: powershell
+        run: |
+          ./scripts/Build-OcrRuntime.ps1 -OutputDirectory (Join-Path $pwd 'dist')
+          $build=@(Get-ChildItem dist -Directory -Filter 'ocr-build-*')[0]
+          $runtime=Join-Path $build.FullName 'runtime/python.exe'
+          & $runtime -I (Join-Path $pwd 'QLTK/CaptchaOcrTests.py')
+          if($LASTEXITCODE -ne 0){throw 'OCR crop regression checks failed'}
+          $info=New-Object Diagnostics.ProcessStartInfo
+          $info.FileName=$runtime;$info.Arguments='-I "'+(Join-Path $pwd 'QLTK/CaptchaOcr.py')+'" --worker'
+          $info.UseShellExecute=$false;$info.CreateNoWindow=$true;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true;$info.RedirectStandardInput=$true
+          $process=New-Object Diagnostics.Process;$process.StartInfo=$info;$null=$process.Start();$process.StandardInput.Close()
+          $output=$process.StandardOutput.ReadToEndAsync();$errorOutput=$process.StandardError.ReadToEndAsync()
+          if(!$process.WaitForExit(60000)){throw 'OCR runtime smoke test timed out'}
+          if($process.ExitCode -ne 0 -or !$output.Wait(1000) -or $output.Result -notmatch 'READY'){throw 'OCR runtime smoke test failed'}
+          $process.Dispose()
+      - name: Build program-only update and portable bundles
+        shell: powershell
+        run: ./scripts/Build-Release.ps1 -Version ([int]$env:QLTK_VERSION) -Repository $env:GITHUB_REPOSITORY
+      - name: Verify NET Framework 4.8 launcher
+        shell: powershell
+        run: ./scripts/Test-Net48Release.ps1 -OutputDirectory (Join-Path $pwd 'dist')
+      - name: Test and build separate CSharp frontend preview
+        shell: powershell
+        run: |
+          ./scripts/Test-NativePreview.ps1
+          ./scripts/Build-NativePreview.ps1 -OutputDirectory (Join-Path $pwd 'dist/native-preview')
+          Compress-Archive -Path dist/native-preview/* -DestinationPath dist/QLTK-CSharp-Preview.zip
+      - name: Build standalone OCR portal
+        shell: powershell
+        run: ./scripts/Build-OcrPortal.ps1 -RuntimeArchive (Join-Path $pwd 'dist/QLTK-ocr-runtime-win64.zip') -OutputDirectory (Join-Path $pwd 'dist')
+      - name: Publish release assets
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME --draft --repo $env:GITHUB_REPOSITORY --title "QLTK $env:GITHUB_REF_NAME" --generate-notes
+          if($LASTEXITCODE -ne 0){throw 'Could not create draft release'}
+          $assets=@('QLTK-update.zip','QLTK-portable.zip','QLTK-net48-launcher.zip','QLTK-ocr-runtime-win64.zip','OCR-Portal-portable.zip','QLTK-CSharp-Preview.zip')
+          foreach($name in $assets){
+            $uploaded=$false
+            for($attempt=1;$attempt -le 3;$attempt++){
+              gh release upload $env:GITHUB_REF_NAME (Join-Path 'dist' $name) --clobber --repo $env:GITHUB_REPOSITORY
+              if($LASTEXITCODE -eq 0){$uploaded=$true;break}
+              Start-Sleep -Seconds 3
+            }
+            if(!$uploaded){throw ('Upload failed; release remains draft: '+$name)}
+          }
+          $release=gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --json isDraft,assets | ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or !$release.isDraft){throw 'Release changed during upload'}
+          foreach($name in $assets){
+            $asset=@($release.assets | Where-Object {$_.name -eq $name})
+            if($asset.Count -ne 1 -or $asset[0].size -ne (Get-Item (Join-Path 'dist' $name)).Length){throw ('Asset size mismatch: '+$name)}
+          }
+          gh release edit $env:GITHUB_REF_NAME --draft=false --repo $env:GITHUB_REPOSITORY
+          if($LASTEXITCODE -ne 0){throw 'Could not publish verified release'}

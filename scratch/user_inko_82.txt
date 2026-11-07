@@ -1,0 +1,18 @@
+﻿<USER_REQUEST>
+gửi lại danh sách cho em theo thứ tự thế này : 
+Tên nv/map/nội dung/cách làm
+	luyện tập/làng lá/tìm npc konoha utatane để nhận nv/click vào nội dung nv hiển thị sẽ tự chạy đến npc, sau đó phải click chuột vào màn hình cho đến lúc hiện đoạn chat hiện ra chữ nhận > bấm vào nhận > sau đó bấm vào túi đồ và sử dụng kiếm gỗ > tắt túi và mở cài đặt > tich chọn vào 2 ô sử dụng hp và mp có sẵn trong mục tự động > sau đó đánh 5 con bù nhìn rơm > khi xong thì chạy về npc sẽ hiện lên bảng có chữ hoàn thành bấm vào và nói chuyện đến khi hiện ra nút hoàn thành thì bấm vào.
+
+	bắt cừu về/làng lá/tìm npc konoha utatane để nhận nv/click vào nội dung nv hiển thị sẽ tự chạy đến npc, sau đó phải click chuột vào màn hình cho đến lúc hiện đoạn chat hiện ra chữ nhận > bấm vào nhận > đánh 10 cừu con>  khi xong thì chạy về npc sẽ hiện lên bảng có chữ hoàn thành bấm vào và nói chuyện đến khi hiện ra nút hoàn thành thì bấm vào > sẽ hiện ra 1 bảng có cấu hình giống túi đồ rồi bấm vào tự chọn > đồng ý 
+	hái thuốc trị thương	làng lá	tìm npc konoha utatane để nhận nv	click vào nội dung nv hiển thị sẽ tự chạy đến npc, sau đó phải click chuột vào màn hình cho đến lúc hiện đoạn chat hiện ra chữ nhận > bấm vào nhận > hái 3  cây thược dược> khi xong thì chạy về npc sẽ hiện lên bảng có chữ hoàn thành bấm vào và nói chuyện đến khi hiện ra nút hoàn thành thì bấm vào > sẽ hiện ra 1 bảng có cấu hình giống túi đồ rồi bấm vào tự chọn > đồng ý 
+	làm người tốt bụng/làng lá, núi hogake/tìm npc anko  mitarashi để nhận nv/click vào nội dung nv hiển thị sẽ tự chạy đến npc, sau đó phải clic
+<truncated 732 bytes>
+ tác lại với npc udon > chọn dẫn udon về > khi xong thì chạy về npc sẽ hiện lên bảng có chữ hoàn thành bấm vào và nói chuyện đến khi hiện ra nút hoàn thành
+	xua đuổi dơi rừng /làng lá, núi hogake/tìm npc konoha utatane để nhận nv/yêu cầu lv7 > đến map hokage > đánh 15 dơi đen > khi xong thì chạy về npc sẽ hiện lên bảng có chữ hoàn thành bấm vào và nói chuyện đến khi hiện ra nút hoàn thành
+	cảnh báo dân làng /làng lá, thung lũng tận cùng/tìm npc konoha utatane để nhận nv/yêu cầu lv8 > thung lũng tận cùng > click vào bảng nhiệm vụ nhân vật sẽ tự chạy đến nơi cắm cờ vị trí 1 > sử dụng item cờ cảnh báo trong túi > làm tương tự tổng tất cả 3 vị trí > khi xong thì chạy về npc sẽ hiện lên bảng có chữ hoàn thành bấm vào và nói chuyện đến khi hiện ra nút hoàn thành
+	xua đuổi hầu tử/làng lá, thung lũng tận cùng/tìm npc konoha utatane để nhận nv/yêu cầu lv9 > thung lũng tận cùng > đánh 20 khỉ phá phách > khi xong thì chạy về npc sẽ hiện lên bảng có chữ hoàn thành bấm vào và nói chuyện đến khi hiện ra nút hoàn thành
+	nhẫn giả học viên/làng lá,trường konoha/tìm npc konoha utatane để nhận nv/yêu cầu lv10 > nói chuyện với npc konohamaru > nói chuyện với npc anko  mitarashi > đến map trường konoha >nói chuyện với npc hatake kakashi > nói chuyện với npc sarutobi asuma > nói chuyện với npc yuhi kurenai > nói chuyện với npc maito gai > nói chuyện với npc umino iruka > tháo kiếm gỗ > xin nhập học > cộng tiềm năng > cộng kĩ năng > khi xong thì chạy về npc sẽ hiện lên bảng có chữ hoàn thành bấm vào và nói chuyện đến khi hiện ra nút hoàn thành
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-10-31T20:22:56+07:00.
+</ADDITIONAL_METADATA>
