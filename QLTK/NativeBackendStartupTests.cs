@@ -1,4 +1,4 @@
-using System;using System.Collections.Generic;using System.Diagnostics;using System.IO;using System.Linq;using System.Net;using System.Net.Sockets;using System.Threading.Tasks;using System.Web.Script.Serialization;using TGLL.Preview;
+﻿using System;using System.Collections.Generic;using System.Diagnostics;using System.IO;using System.Linq;using System.Net;using System.Net.Sockets;using System.Threading.Tasks;using System.Web.Script.Serialization;using TGLL.Preview;
 class NativeBackendStartupTests {
  static void Check(bool value,string message){if(!value)throw new Exception(message);}
  static Dictionary<string,object> Map(object value){return JsonValue.Map(value);}static object[] List(object value){return JsonValue.Array(value);}static string Text(Dictionary<string,object> node,string key){return JsonValue.Text(node,key);}

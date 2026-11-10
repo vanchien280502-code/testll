@@ -1,4 +1,4 @@
-using System;using System.Collections.Generic;using TGLL;
+﻿using System;using System.Collections.Generic;using TGLL;
 class SonCapFocusTests {
  static void C(bool b,string m){if(!b)throw new Exception(m);}
  static void Main(){

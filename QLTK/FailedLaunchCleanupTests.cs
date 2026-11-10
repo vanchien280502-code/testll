@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using TGLL;
 class FailedLaunchCleanupTests {
     static void Check(bool value,string message){if(!value)throw new Exception(message);}

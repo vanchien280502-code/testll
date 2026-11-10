@@ -155,7 +155,9 @@ try {
     if (!$UiTest -and (Test-Path $script:storePath)) { $decoded = Read-JsonData $script:storePath; $script:accounts = @($decoded) }
     if (!$UiTest -and (Test-Path $script:configPath)) {
         $loaded = Read-JsonData $script:configPath
-        foreach ($key in @('jar','java','mode','arguments','socketPort','socketEnabled','proxyBridge','dungeonMaxOnline','dungeonCloseAfter','izanamiMaxOnline','izanamiGroupSize','izanamiCloseAfter','dailyPriority','soncapGroupSize','soncapPortals','soncapMaxOnline','soncapCloseAfter','questMaxOnline','questCloseAfter','beastMaxOnline','beastCloseAfter','launchDelaySeconds','launchConcurrency','autoReconnect')) { if ($null -ne $loaded.$key) { $script:settings[$key] = $loaded.$key } }
+        foreach($prop in $loaded.PSObject.Properties){
+            if($null -ne $prop.Value){$script:settings[$prop.Name]=$prop.Value}
+        }
     }
 } catch { Show-Error "Không đọc được dữ liệu. Ứng dụng sẽ dừng để tránh ghi đè: $($_.Exception.Message)"; exit 1 }
 if(!$UiTest -and $script:defaultGame -and ([string]::IsNullOrWhiteSpace([string]$script:settings.jar) -or !(Test-Path -LiteralPath ([string]$script:settings.jar) -PathType Leaf))){$script:settings.jar=$script:defaultGame}
@@ -297,17 +299,21 @@ function Edit-Account($existing) {
     } finally { $dialog.Dispose() }
 }
 function Open-Account($a,[bool]$reconnect=$false) {
-    if((Get-Command Get-CloakQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-CloakQueuedMember ([string]$a.id))){$status.Text="Tài khoản đang chờ mua/mặc áo: "+$a.username;return}
-    if((Get-Command Get-DistributionQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-DistributionQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ chia đồ.';return}
-    if((Get-Command Get-MailQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-MailQueuedMember ([string]$a.id))){$status.Text="Tài khoản đang chờ lượt gom đồ: "+$a.username;return}
-    if((Get-Command Get-QuestQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-QuestQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ lượt nhiệm vụ: '+$a.username;return}
-    if((Get-Command Get-BeastQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-BeastQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ linh thú';return}
-    if($script:closingAll){$status.Text='Đang tắt tất cả game; đợi đóng xong rồi mở lại.';return}
-    if((Get-AccountLaunchMode $a) -eq 'beast' -and [string]$script:beastLaunchingAccountId -ne [string]$a.id -and (Get-Command Add-BeastQueue -ErrorAction SilentlyContinue)){Add-BeastQueue @($a);return}
-    if((Get-AccountLaunchMode $a) -eq 'soncap' -and [string]$script:beastLaunchingAccountId -ne [string]$a.id -and [string]$script:soncapLaunchingAccountId -ne [string]$a.id -and (Get-Command Add-SonCapQueue -ErrorAction SilentlyContinue)){Add-SonCapQueue @($a);return}
-    if((Get-Command Get-SonCapQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-SonCapQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ lượt Sơn Cáp: '+$a.username;return}
-    if((Get-Command Get-IzanamiQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-IzanamiQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ lượt cấm thuật: '+$a.username;return}
-    if((Get-Command Get-DungeonQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-DungeonQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ lượt địa cung: '+$a.username;return}
+    $isNewbieLaunch=([string]$script:newbieLaunchingAccountId -eq [string]$a.id)
+    $isShopGoldLaunch=([string]$script:mailLaunchingAccountId -eq [string]$a.id)
+    if(!$isNewbieLaunch -and !$isShopGoldLaunch){
+        if((Get-Command Get-CloakQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-CloakQueuedMember ([string]$a.id))){$status.Text="Tài khoản đang chờ mua/mặc áo: "+$a.username;return}
+        if((Get-Command Get-DistributionQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-DistributionQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ chia đồ.';return}
+        if((Get-Command Get-MailQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-MailQueuedMember ([string]$a.id))){$status.Text="Tài khoản đang chờ lượt gom đồ: "+$a.username;return}
+        if((Get-Command Get-QuestQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-QuestQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ lượt nhiệm vụ: '+$a.username;return}
+        if((Get-Command Get-BeastQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-BeastQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ linh thú';return}
+        if($script:closingAll){$status.Text='Đang tắt tất cả game; đợi đóng xong rồi mở lại.';return}
+        if((Get-AccountLaunchMode $a) -eq 'beast' -and [string]$script:beastLaunchingAccountId -ne [string]$a.id -and (Get-Command Add-BeastQueue -ErrorAction SilentlyContinue)){Add-BeastQueue @($a);return}
+        if((Get-AccountLaunchMode $a) -eq 'soncap' -and [string]$script:beastLaunchingAccountId -ne [string]$a.id -and [string]$script:soncapLaunchingAccountId -ne [string]$a.id -and (Get-Command Add-SonCapQueue -ErrorAction SilentlyContinue)){Add-SonCapQueue @($a);return}
+        if((Get-Command Get-SonCapQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-SonCapQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ lượt Sơn Cáp: '+$a.username;return}
+        if((Get-Command Get-IzanamiQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-IzanamiQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ lượt cấm thuật: '+$a.username;return}
+        if((Get-Command Get-DungeonQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-DungeonQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ lượt địa cung: '+$a.username;return}
+    }
     if(Test-AccountOpenBlocked $a){$status.Text='Tài khoản đã có game đang chạy hoặc đang mở: '+$a.username;return}
     $proxy=Read-Proxy $a
     $launched=Start-ManagedAccount $a $proxy ($autoLoginCheck.Checked -or $reconnect)
@@ -477,12 +483,14 @@ $bulkOpen=Add-Button 'Open đã chọn' 750 474 149 {
     if($questRows.Count){try{Add-QuestQueue @($questRows | ForEach-Object {$_.Tag})}catch{Show-Error $_.Exception.Message;return}}
     $dungeonRows=@($launchRows | Where-Object {(Get-AccountLaunchMode $_.Tag) -eq 'dungeon' -and $_.Tag.dungeonHigh})
     if($dungeonRows.Count){try{Add-DungeonQueue @($dungeonRows | ForEach-Object {$_.Tag})}catch{Show-Error $_.Exception.Message;return}}
+    $newbieRows=@($launchRows | Where-Object {(Get-AccountLaunchMode $_.Tag) -eq 'newbie'})
+    if($newbieRows.Count){try{Add-NewbieQueue @($newbieRows | ForEach-Object {$_.Tag})}catch{Show-Error $_.Exception.Message;return}}
     $errors=0
     foreach($row in @($launchRows | Where-Object {(Get-AccountLaunchMode $_.Tag) -in @('farm') -or ((Get-AccountLaunchMode $_.Tag) -in @('normal','dungeon') -and !$_.Tag.dungeonHigh)})) {try {Open-Account $row.Tag} catch {$errors++}}
     if ($errors) {Show-Error ($errors.ToString()+' tài khoản chưa xếp hàng được. Kiểm tra proxy và đường dẫn game; không có bộ chuyển thì tài khoản có proxy sẽ không mở.')}
 }
 $bulkOpen.Anchor='Bottom,Left'
-$cancelButton=Add-Button 'Hủy hàng đợi' 24 515 155 {if(Get-Command Stop-AutoAll -ErrorAction SilentlyContinue){Stop-AutoAll};if(Get-Command Reset-DungeonQueue -ErrorAction SilentlyContinue){Reset-DungeonQueue;Update-DungeonQueueStatus};if(Get-Command Stop-MailCollection -ErrorAction SilentlyContinue){Stop-MailCollection};if(Get-Command Reset-SonCapQueue -ErrorAction SilentlyContinue){Reset-SonCapQueue;Update-SonCapQueueStatus};if(Get-Command Reset-IzanamiQueue -ErrorAction SilentlyContinue){Reset-IzanamiQueue;Update-IzanamiQueueStatus};if(Get-Command Reset-QuestQueue -ErrorAction SilentlyContinue){Reset-QuestQueue;Update-QuestQueueStatus};[TGLL.AutoLogin]::CancelAll(); [TGLL.NativeBackend]::CancelAll(); $status.Text='Đã yêu cầu hủy các tác vụ đăng nhập chưa hoàn tất.'}; $cancelButton.Anchor='Bottom,Left'
+$cancelButton=Add-Button 'Hủy hàng đợi' 24 515 155 {if(Get-Command Stop-AutoAll -ErrorAction SilentlyContinue){Stop-AutoAll};if(Get-Command Reset-DungeonQueue -ErrorAction SilentlyContinue){Reset-DungeonQueue;Update-DungeonQueueStatus};if(Get-Command Stop-MailCollection -ErrorAction SilentlyContinue){Stop-MailCollection};if(Get-Command Reset-SonCapQueue -ErrorAction SilentlyContinue){Reset-SonCapQueue;Update-SonCapQueueStatus};if(Get-Command Reset-IzanamiQueue -ErrorAction SilentlyContinue){Reset-IzanamiQueue;Update-IzanamiQueueStatus};if(Get-Command Reset-QuestQueue -ErrorAction SilentlyContinue){Reset-QuestQueue;Update-QuestQueueStatus};if(Get-Command Reset-NewbieQueue -ErrorAction SilentlyContinue){Reset-NewbieQueue;Update-NewbieQueueStatus};if(Get-Command Stop-ShopGold -ErrorAction SilentlyContinue){Stop-ShopGold};[TGLL.AutoLogin]::CancelAll(); [TGLL.NativeBackend]::CancelAll(); $status.Text='Đã yêu cầu hủy các tác vụ đăng nhập chưa hoàn tất.'}; $cancelButton.Anchor='Bottom,Left'
 $npcIdsButton=Add-Button 'Xem ID NPC' 364 515 155 {
     if ($grid.SelectedRows.Count -eq 0) {Show-Error 'Chọn tài khoản cần xem.';return}
     $id=[string]$grid.SelectedRows[0].Tag.id
@@ -661,3 +669,5 @@ try {
     if($BackendOnly -and [IO.File]::Exists($endpointPath)){try{$ep=Read-JsonData $endpointPath;if([int]$ep.pid -eq [Diagnostics.Process]::GetCurrentProcess().Id){[IO.File]::Delete($endpointPath)}}catch{}}
     $socketTimer.Stop();$socketTimer.Dispose();[TGLL.AutoLogin]::CancelAll();[TGLL.NativeBackend]::CancelAll();Stop-SocketApi;$form.Dispose()
 }
+
+

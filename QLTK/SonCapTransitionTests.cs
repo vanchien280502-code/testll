@@ -1,4 +1,4 @@
-using System;using TGLL;
+﻿using System;using TGLL;
 class SonCapTransitionTests {
  static void C(bool b,string m){if(!b)throw new Exception(m);}
  static void Main(){NativeBackend.LogDirectory=System.IO.Path.GetFullPath("work/soncap142-logs");var t=new DateTime(2026,10,13,0,0,0,DateTimeKind.Utc);

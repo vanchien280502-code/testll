@@ -1,4 +1,4 @@
-$ghRoot=Join-Path (Split-Path $PSScriptRoot -Parent) ('github-update-fixture-'+[guid]::NewGuid().ToString('N'))
+﻿$ghRoot=Join-Path (Split-Path $PSScriptRoot -Parent) ('github-update-fixture-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $ghRoot
 function Assert-GitHubRejected($action,[string]$label){$rejected=$false;try{& $action | Out-Null}catch{$rejected=$true};if(!$rejected){throw ('Accepted invalid update: '+$label)}}
 function New-GitHubZipFixture([string]$path,[string]$name,[string]$text,[bool]$badHash=$false){

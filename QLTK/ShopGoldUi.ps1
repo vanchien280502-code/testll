@@ -274,6 +274,7 @@ function Start-ShopGold {
         error=''
         readyKey=''
         readyAt=[datetime]::MinValue
+        lastSilverSentAt=[datetime]::MinValue
     }
     Update-ShopGoldUi
 }
@@ -375,13 +376,23 @@ function Sync-ShopGoldMember($run, $m, $source, $now) {
         }
         $otherSending=@($run.members | Where-Object { $_ -ne $m -and $_.state -eq 'sending_silver' }).Count
         if($otherSending -eq 0 -and !$source.MailBusy -and !$source.MailEnabled){
+            if($run.lastSilverSentAt -and ($run.lastSilverSentAt -ne [datetime]::MinValue)){
+                $gap=($now - $run.lastSilverSentAt).TotalSeconds
+                if($gap -lt $run.seconds){
+                    $m.status="Đợi giãn cách gửi Bạc từ acc chính ($([Math]::Ceiling($run.seconds - $gap))s)..."
+                    return
+                }
+            }
+            if($source.InboxEnabled){
+                Set-DistributionInbox $source $false
+            }
             Set-DistributionInbox $clone $true
             $m.inboxBaseline=[long]$clone.InboxReceived
             [TGLL.NativeBackend]::ConfigureMail($source.Id,$clone.CharacterName,[int[]]@(),[int[]]@(),($run.seconds*1000),"",$run.silver)
             $m.state='sending_silver';$m.phaseAt=$now
             $m.status="Acc chính đang gửi $($run.silver) Bạc tới $($clone.CharacterName)..."
         }else{
-            $m.status="Đợi lượt gửi Bạc từ acc chính (đang bận clone khác)..."
+            $m.status="Đợi lượt gửi Bạc từ acc chính (đang cấp cho clone khác)..."
         }
         return
     }
@@ -405,6 +416,8 @@ function Sync-ShopGoldMember($run, $m, $source, $now) {
         $m.silverSent=$true
         $m.state='receiving_silver';$m.phaseAt=$now
         $m.status="Đợi clone $($clone.CharacterName) nhận Bạc..."
+        $source.MailDone=$false
+        $run.lastSilverSentAt=$now
         return
     }
 
@@ -493,7 +506,7 @@ function Sync-ShopGoldMember($run, $m, $source, $now) {
         return
     }
 
-    # 10. State: closing -> Wait for clone process to exit, then enable inbox on main
+    # 10. State: closing -> Wait for clone process to exit
     if($m.state -eq 'closing'){
         if($m.closeOperation -and !$m.closeOperation.Completed){return}
         $cloneJob=Get-AccountJob $m.job
@@ -502,8 +515,6 @@ function Sync-ShopGoldMember($run, $m, $source, $now) {
                 $m.status='Đợi game clone tắt hẳn';return
             }
         }
-        # Bật nhận thư trên acc chính để thu hoạch vật phẩm clone gửi về
-        Set-DistributionInbox $source $true
         $m.state='done';$m.status='Hoàn tất'
         return
     }
@@ -534,6 +545,15 @@ function Sync-ShopGold {
         $run.receiverName=$source.CharacterName
     }
 
+    # Tự động bật nhận thư trên acc chính để thu hoạch đồ khi acc chính rảnh (không bận gửi Bạc)
+    $isSendingSilver=@($run.members | Where-Object {$_.state -eq 'sending_silver'}).Count -gt 0
+    $hasItemsToHarvest=@($run.members | Where-Object {$_.state -in @('mailing','closing','done')}).Count -gt 0
+    if(!$isSendingSilver -and !$source.MailBusy -and !$source.MailEnabled -and $hasItemsToHarvest){
+        if(!$source.InboxEnabled){
+            Set-DistributionInbox $source $true
+        }
+    }
+
     # 2. Xử lý đồng bộ từng member đang chạy
     foreach($m in $run.members){
         if($m.state -notin @('waiting','done','blocked')){
@@ -559,9 +579,24 @@ function Sync-ShopGold {
     }
 
     # 5. Khởi chạy các clone mới trong danh sách chờ theo giới hạn maxOnline
-    $occupied=@($run.members | Where-Object {$_.state -notin @('waiting','done')}).Count
+    # Tu dong thu lai sau 30 giay cho cac clone bi blocked do timeout / loi tam thoi
+    foreach($m in $run.members){
+        if($m.state -eq 'blocked' -and $m.phaseAt){
+            if((($now - $m.phaseAt).TotalSeconds) -ge 30){
+                $m.state='waiting'
+                $m.status='Thử lại sau khi bị lỗi/timeout...'
+                $m.phaseAt=$now
+            }
+        }
+    }
+
+    # Chi tinh cac clone dang mo hoac dang thao tac, khong de clone bi loi chiem slot lam dung hang cho
+    $occupied=@($run.members | Where-Object {$_.state -notin @('waiting','done','blocked')}).Count
     $limit=if($shopGoldMax){[int]$shopGoldMax.Value}else{2}
-    $budget=if($launchConcurrency){[int]$launchConcurrency.Value}else{1}
+    $budget=[Math]::Max(0, [int]$limit - $occupied)
+    if($launchConcurrency -and [int]$launchConcurrency.Value -gt 0){
+        $budget=[Math]::Min($budget, [int]$launchConcurrency.Value)
+    }
 
     foreach($m in $run.members){
         if($occupied -ge $limit -or $budget -le 0){break}

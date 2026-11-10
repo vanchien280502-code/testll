@@ -1,4 +1,4 @@
-$liveSavedSources=$script:liveUpdateSources;$liveSavedBinaries=$script:liveUpdateBinaries
+﻿$liveSavedSources=$script:liveUpdateSources;$liveSavedBinaries=$script:liveUpdateBinaries
 $liveSavedMessage=$script:liveUpdateMessage;$liveSavedUntil=$script:liveUpdateMessageUntil
 $liveSavedStatus=$status.Text;$liveSavedTimer=$socketTimer
 $liveDir=Join-Path (Split-Path $PSScriptRoot -Parent) ('live-update-fixture-'+[guid]::NewGuid().ToString('N'))

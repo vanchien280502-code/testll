@@ -1,4 +1,4 @@
-using System;using System.Diagnostics;using System.Reflection;using TGLL;
+﻿using System;using System.Diagnostics;using System.Reflection;using TGLL;
 class QuestTargetTests{
  static void Check(bool ok,string message){if(!ok)throw new Exception(message);}
  static void I(Remote r,long p,int v){r.Write(p,BitConverter.GetBytes(v));}

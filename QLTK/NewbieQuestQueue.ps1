@@ -1379,8 +1379,31 @@ function Pump-NewbieQueue {
         }
     }
     
+    # Tu dong phuc hoi / retry cac batch bi blocked sau 25 giay cooldown
+    $now = [DateTime]::UtcNow
+    foreach ($b in $script:newbieBatches) {
+        if ($b.state -eq 'blocked') {
+            if (!$b.blockedAt) { $b.blockedAt = $now }
+            if (($now - $b.blockedAt).TotalSeconds -ge 25) {
+                $b.state = 'waiting'
+                $b.error = ''
+                $b.blockedAt = $null
+                foreach ($m in $b.members) {
+                    if ($m.status -notlike 'Hoan thanh*') {
+                        $m.status = 'Dang cho thu lai...'
+                    }
+                }
+            }
+        }
+    }
+
+    # Chi tinh cac batch thuc su dang chay hoac dang dong, khong de batch loi chiem slot
     $active = 0
-    foreach ($b in $script:newbieBatches) { if ($b.state -notin @('waiting', 'done')) { $active += $b.members.Count } }
+    foreach ($b in $script:newbieBatches) { 
+        if ($b.state -in @('launching', 'running', 'closing')) { 
+            $active += $b.members.Count 
+        } 
+    }
     $limit = [int]$newbieMax.Value
     
     foreach ($batch in $script:newbieBatches) {
@@ -1391,14 +1414,29 @@ function Pump-NewbieQueue {
         foreach ($m in $batch.members) { $script:newbieWaiting.Remove($m.id) }
     }
     
-    foreach ($batch in $script:newbieBatches) {
-        if ($batch.state -ne 'launching') { continue }
-        $member = @($batch.members | Where-Object { !$_.job }) | Select-Object -First 1
-        if ($member) {
-            try { Start-NewbieMember $member } catch { $batch.state = 'blocked'; $batch.error = [string]$_.Exception.Message }
-            break
+    $concurrencyBudget = if ($launchConcurrency) { [Math]::Max(1, [int]$launchConcurrency.Value) } else { 1 }
+    for ($launchIndex = 0; $launchIndex -lt $concurrencyBudget; $launchIndex++) {
+        $submitted = $false
+        foreach ($batch in $script:newbieBatches) {
+            if ($batch.state -ne 'launching') { continue }
+            $member = @($batch.members | Where-Object { !$_.job }) | Select-Object -First 1
+            if ($member) {
+                $submitted = $true
+                try { 
+                    Start-NewbieMember $member 
+                } catch { 
+                    $batch.state = 'blocked'
+                    $batch.error = [string]$_.Exception.Message
+                    $batch.blockedAt = [DateTime]::UtcNow
+                    foreach ($m in $batch.members) {
+                        $m.status = 'Loi mo: ' + $_.Exception.Message
+                    }
+                }
+                break
+            }
+            $batch.state = 'running'
         }
-        $batch.state = 'running'
+        if (!$submitted) { break }
     }
     Update-NewbieQueueStatus
 }

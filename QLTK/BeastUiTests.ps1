@@ -20,7 +20,7 @@ try{
  Add-BeastQueue $script:accounts;for($n=0;$n -lt 3;$n++){Pump-BeastQueue}
  if($script:btStarts.Count -ne 1 -or $beastMax.Minimum -ne 1 -or $beastMax.Increment -ne 1){throw 'Single-account limit unsupported'}
  Update-BeastUi;if($beastHint.Text -notmatch '1 / 1' -or $beastCloseAfter.Text -notmatch 'Tắt từng game'){throw 'Solo status/close option not updated'}
- if($tabs.TabPages.Count -notin @(26,27,28) -or $beastPage.Text -ne 'Auto Linh thú'){throw 'Beast UI missing'}
+ if($tabs.TabPages.Count -notin @(26,27,28,29) -or $beastPage.Text -ne 'Auto Linh thú'){throw 'Beast UI missing'}
  # Max50 must fill with healthy accounts when the first 40 launch attempts fail.
  function Test-AccountOpenBlocked($a){$j=$script:btJobs[[string]$a.id];return ($j -and $j.State -in @('opened','queued','starting','retrying','reconnecting'))}
  function Get-AccountJob($id){return $script:btJobs[[string]$id]}
@@ -57,7 +57,7 @@ try{
  $btNative=[TGLL.NativeBackend].GetField('jobs',[Reflection.BindingFlags]'NonPublic,Static').GetValue($null)
  $btCtor=[TGLL.NativeJob].GetConstructors([Reflection.BindingFlags]'NonPublic,Instance')[0]
  $busy=$btCtor.Invoke(@('C:\synthetic.exe','busy','unused',$null,$true));$good=$btCtor.Invoke(@('C:\synthetic.exe','good','unused',$null,$true))
- $busy.State='opened';$good.State='opened';[TGLL.NativeJob].GetField('ReceiveFlowActive',[Reflection.BindingFlags]'NonPublic,Instance').SetValue($busy,$true)
+ $busy.State='opened';$good.State='opened';[TGLL.NativeJob].GetField('ReceiveFlowActive',[Reflection.BindingFlags]'Public,NonPublic,Instance').SetValue($busy,$true)
  try{
   foreach($job in @($busy,$good)){$null=$btNative.TryAdd($job.Id,$job);$script:btJobs[$job.Id]=$job}
   $script:beastBatches=@(foreach($job in @($busy,$good)){[pscustomobject]@{state='blocked';members=@([pscustomobject]@{id=$job.Id;job=$job.Id});closeOperation=$null;error=''}})

@@ -1,4 +1,4 @@
-using System;using System.Diagnostics;using System.Reflection;using System.Collections.Concurrent;using TGLL;
+﻿using System;using System.Diagnostics;using System.Reflection;using System.Collections.Concurrent;using TGLL;
 class LeaderZoneTests {
  static ConcurrentDictionary<string,NativeJob> Jobs=(ConcurrentDictionary<string,NativeJob>)typeof(NativeBackend).GetField("jobs",BindingFlags.Static|BindingFlags.NonPublic).GetValue(null);
  static void C(bool b,string m){if(!b)throw new Exception(m);}static void I(Remote r,long p,int n){r.Write(p,BitConverter.GetBytes(n));}static int R(Remote r,long p){return BitConverter.ToInt32(r.Read(p,4),0);}

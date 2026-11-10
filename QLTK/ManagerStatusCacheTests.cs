@@ -1,4 +1,4 @@
-using System;using TGLL;
+﻿using System;using TGLL;
 class ManagerStatusCacheTests {
  class Job {public string State="opened",QuestStatus="running";public int QuestRemaining=3,Hp=100;public DateTime CurseReadAt=DateTime.UtcNow;}
  static void C(bool ok,string text){if(!ok)throw new Exception(text);}

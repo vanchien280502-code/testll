@@ -1,4 +1,4 @@
-using System;using System.Diagnostics;using System.Reflection;using TGLL;
+﻿using System;using System.Diagnostics;using System.Reflection;using TGLL;
 class IzanamiTravelTests {
     static void Check(bool ok,string text){if(!ok)throw new Exception(text);}
     static void Int(Remote r,long p,int value){r.Write(p,BitConverter.GetBytes(value));}

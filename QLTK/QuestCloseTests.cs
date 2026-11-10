@@ -1,4 +1,4 @@
-using System;using System.Reflection;using System.Collections.Concurrent;using TGLL;
+﻿using System;using System.Reflection;using System.Collections.Concurrent;using TGLL;
 class QuestCloseTests{
  static void C(bool ok,string reason){if(!ok)throw new Exception(reason);}
  static void Main(){var jobs=(ConcurrentDictionary<string,NativeJob>)typeof(NativeBackend).GetField("jobs",BindingFlags.Static|BindingFlags.NonPublic).GetValue(null);var j=new NativeJob("synthetic.exe","fixture","unused",null,true);jobs[j.Id]=j;j.ProcessId=1;j.State="opened";j.QuestEnabled=false;j.QuestFinished=true;j.QuestRemaining=0;int closes=0;Action<NativeJob> close=p=>closes++;

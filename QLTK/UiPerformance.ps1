@@ -43,6 +43,8 @@ function Update-ActiveTabUi {
     elseif($selected -eq $giftPage){Update-GiftUi}
     elseif($selected -eq $mailPage){Update-MailUi}
     elseif($selected -eq $distributionPage){Update-DistributionUi}
+    elseif($selected -eq $shopGoldPage){if(Get-Command Update-ShopGoldUi -ErrorAction SilentlyContinue){Update-ShopGoldUi}}
+    elseif($selected -eq $newbiePage){if(Get-Command Update-NewbieQueueStatus -ErrorAction SilentlyContinue){Update-NewbieQueueStatus}}
 }
 $tabs.Add_SelectedIndexChanged({Update-ActiveTabUi})
 
@@ -59,6 +61,7 @@ function Invoke-ActivityQueuePhase {
   4 {Invoke-UiTimedStep 'Pump-QuestQueue';[TGLL.NativeBackend]::PulseQuestAutoClose()}
  }
  if(Get-Command Pump-NewbieQueue -ErrorAction SilentlyContinue){Invoke-UiTimedStep 'Pump-NewbieQueue'}
+ if(Get-Command Sync-ShopGold -ErrorAction SilentlyContinue){Invoke-UiTimedStep 'Sync-ShopGold'}
 }
 function Invoke-UiTimedStep([string]$stepName){
  $clock=[Diagnostics.Stopwatch]::StartNew()

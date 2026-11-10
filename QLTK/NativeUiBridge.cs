@@ -1,4 +1,4 @@
-using System;using System.Collections.Generic;using System.Drawing;using System.Drawing.Imaging;using System.IO;using System.Linq;using System.Reflection;using System.Runtime.CompilerServices;using System.Runtime.InteropServices;using System.Security.Cryptography;using System.Text;using System.Web.Script.Serialization;using System.Windows.Forms;
+﻿using System;using System.Collections.Generic;using System.Drawing;using System.Drawing.Imaging;using System.IO;using System.Linq;using System.Reflection;using System.Runtime.CompilerServices;using System.Runtime.InteropServices;using System.Security.Cryptography;using System.Text;using System.Web.Script.Serialization;using System.Windows.Forms;
 namespace TGLL {
  // Typed adapter to existing controllers. No arbitrary method/script evaluation is exposed.
  public sealed class NativeUiBridge {

@@ -1,4 +1,4 @@
-using System;using TGLL;
+﻿using System;using TGLL;
 class InboxReuseTests{
  static void C(bool ok,string message){if(!ok)throw new Exception(message);}
  static int Main(){try{

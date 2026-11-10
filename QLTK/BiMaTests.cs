@@ -1,4 +1,4 @@
-using System;using System.IO;using System.Linq;using System.Reflection;using System.Diagnostics;using System.Collections.Concurrent;using TGLL;
+﻿using System;using System.IO;using System.Linq;using System.Reflection;using System.Diagnostics;using System.Collections.Concurrent;using TGLL;
 class BiMaTests {
  static void C(bool b,string m){if(!b)throw new Exception(m);}static void P(Remote r,long p,long v){r.Write(p,BitConverter.GetBytes(v));}static void I(Remote r,long p,int v){r.Write(p,BitConverter.GetBytes(v));}
  static int Main(){try{
