@@ -13,13 +13,13 @@ $null=Ui-Label 'Bạc cấp:' $shopGoldPage 450 34 60 22
 $shopGoldSilver=New-Object Windows.Forms.NumericUpDown;$shopGoldSilver.Minimum=0;$shopGoldSilver.Maximum=2000000000;$shopGoldSilver.Value=10000;$shopGoldSilver.SetBounds(515,32,95,24);$shopGoldPage.Controls.Add($shopGoldSilver)
 
 $null=Ui-Label 'Cách thư (s):' $shopGoldPage 620 34 85 22
-$shopGoldDelay=New-Object Windows.Forms.NumericUpDown;$shopGoldDelay.Minimum=1;$shopGoldDelay.Maximum=3600;$shopGoldDelay.Value=5;$shopGoldDelay.SetBounds(710,32,60,24);$shopGoldPage.Controls.Add($shopGoldDelay)
+$shopGoldDelay=New-Object Windows.Forms.NumericUpDown;$shopGoldDelay.Minimum=0;$shopGoldDelay.Maximum=3600;$shopGoldDelay.Value=1;$shopGoldDelay.SetBounds(710,32,60,24);$shopGoldPage.Controls.Add($shopGoldDelay)
 
 $null=Ui-Label 'Mã Gift Code (clone tự nhập trước để nhận Vàng):' $shopGoldPage 14 62 310 22
 $shopGoldCodes=New-Object Windows.Forms.TextBox;$shopGoldCodes.Multiline=$true;$shopGoldCodes.ScrollBars='Vertical';$shopGoldCodes.SetBounds(14,86,305,84);$shopGoldPage.Controls.Add($shopGoldCodes)
 if($script:settings.ContainsKey('shopGoldCodes')){$shopGoldCodes.Text=$script:settings.shopGoldCodes}
 if($script:settings.ContainsKey('shopGoldSilver')){$shopGoldSilver.Value=[Math]::Max(0,[Math]::Min(2000000000,[int]$script:settings.shopGoldSilver))}
-if($script:settings.ContainsKey('shopGoldDelay')){$shopGoldDelay.Value=[Math]::Max(1,[Math]::Min(3600,[int]$script:settings.shopGoldDelay))}
+if($script:settings.ContainsKey('shopGoldDelay')){$shopGoldDelay.Value=[Math]::Max(0,[Math]::Min(3600,[int]$script:settings.shopGoldDelay))}
 
 $null=Ui-Label 'Danh mục vật phẩm Shop Vàng (Tích chọn & nhập số lượng mua mỗi clone):' $shopGoldPage 330 62 455 22
 $shopGoldGrid=New-Object Windows.Forms.DataGridView;$shopGoldGrid.SetBounds(330,86,455,160);$shopGoldGrid.AllowUserToAddRows=$false;$shopGoldGrid.RowHeadersVisible=$false;$shopGoldGrid.SelectionMode='FullRowSelect';$shopGoldGrid.MultiSelect=$false;$shopGoldPage.Controls.Add($shopGoldGrid)
@@ -251,8 +251,10 @@ function Start-ShopGold {
                 status='Chờ đến lượt'
                 at=[datetime]::UtcNow
                 phaseAt=[datetime]::MinValue
-                silverSent=$false
+                silverSending=$false
+                silverDelivered=$false
                 inboxBaseline=0
+                inboxCleanTicks=0
                 readyKey=''
                 readyAt=[datetime]::MinValue
                 closeOperation=$null
@@ -275,6 +277,7 @@ function Start-ShopGold {
         readyKey=''
         readyAt=[datetime]::MinValue
         lastSilverSentAt=[datetime]::MinValue
+        currentSendingCloneId=''
     }
     Update-ShopGoldUi
 }
@@ -331,14 +334,14 @@ function Sync-ShopGoldMember($run, $m, $source, $now) {
         $m.character=$clone.CharacterName
         Prepare-ShopGoldJob $clone
 
-        # Clone online -> Nhập Gift Code trước (nếu có)
+        # Clone online -> Tự động nhập Gift Code trước (nếu có) hoặc đợi Bạc để nhận thư
         if($run.codes.Count -gt 0){
             [TGLL.NativeBackend]::ConfigureGiftCodes($clone.Id,$true,$run.codes)
             $m.state='waiting_gift';$m.phaseAt=$now
             $m.status='Đang nhập Gift Code nhận Vàng...'
         }elseif($run.silver -gt 0){
-            $m.state='awaiting_silver';$m.phaseAt=$now
-            $m.status='Đợi lượt acc chính cấp Bạc...'
+            $m.state='waiting_silver_inbox';$m.phaseAt=$now
+            $m.status='Đợi acc chính gửi Bạc vào hòm thư...'
         }else{
             $m.state='buying_shop';$m.phaseAt=$now;$m.status='Bắt đầu mua Shop Vàng'
         }
@@ -355,90 +358,81 @@ function Sync-ShopGoldMember($run, $m, $source, $now) {
         $elapsed=(($now-$m.phaseAt).TotalSeconds)
         if($clone.GiftStatus -match 'Đã xử lý hết' -or (!$clone.GiftEnabled -and $elapsed -ge 3) -or ($elapsed -gt $timeoutSeconds)){
             [TGLL.NativeBackend]::ConfigureGiftCodes($clone.Id,$false,$run.codes)
-            # Sau khi nhập code xong -> Chuyển sang gửi & nhận Bạc (nếu có)
-            if($run.silver -gt 0){
-                $m.state='awaiting_silver';$m.phaseAt=$now
-                $m.status='Đã xong Gift Code; đợi lượt acc chính cấp Bạc...'
-            }else{
-                $m.state='buying_shop';$m.phaseAt=$now;$m.status='Đã xong Gift Code; bắt đầu mua Shop Vàng'
-            }
+            $m.state='waiting_silver_inbox';$m.phaseAt=$now
+            $m.status='Đã xong Gift Code; đợi Bạc từ acc chính để nhận toàn bộ thư...'
         }else{
             $m.status="Đang nhập Gift Code ($($clone.GiftRequests)/$($run.codes.Count)): $($clone.GiftStatus)"
         }
         return
     }
 
-    # 3. State: awaiting_silver -> Wait for turn to receive silver from main account (only 1 clone at a time)
-    if($m.state -eq 'awaiting_silver'){
+    # 3. State: waiting_silver_inbox -> Đợi thư quà Gift Code và thư Bạc tới đầy đủ trong hòm thư
+    if($m.state -eq 'waiting_silver_inbox'){
         $clone=Get-DistributionJob $m.id
         if(!$clone -or !(Test-DistributionSessionLive $clone)){
-            throw 'Game clone bị thoát trong lúc chờ nhận Bạc.'
+            throw 'Game clone bị thoát trong lúc đợi nhận thư.'
         }
-        $otherSending=@($run.members | Where-Object { $_ -ne $m -and $_.state -eq 'sending_silver' }).Count
-        if($otherSending -eq 0 -and !$source.MailBusy -and !$source.MailEnabled){
-            if($run.lastSilverSentAt -and ($run.lastSilverSentAt -ne [datetime]::MinValue)){
-                $gap=($now - $run.lastSilverSentAt).TotalSeconds
-                if($gap -lt $run.seconds){
-                    $m.status="Đợi giãn cách gửi Bạc từ acc chính ($([Math]::Ceiling($run.seconds - $gap))s)..."
-                    return
-                }
+        $canOpenInbox=$false
+        if($run.silver -gt 0){
+            if($m.silverDelivered){
+                $canOpenInbox=$true
+            }else{
+                $m.status='Đợi acc chính gửi Bạc vào hòm thư...'
             }
-            if($source.InboxEnabled){
-                Set-DistributionInbox $source $false
+        }else{
+            # Nếu không cấp Bạc: đợi 2s để server gửi hết quà Gift Code vào hòm thư
+            if((($now-$m.phaseAt).TotalSeconds) -ge 2){
+                $canOpenInbox=$true
+            }else{
+                $m.status='Đợi server gửi quà Gift Code vào hòm thư...'
             }
+        }
+
+        if($canOpenInbox){
             Set-DistributionInbox $clone $true
             $m.inboxBaseline=[long]$clone.InboxReceived
-            [TGLL.NativeBackend]::ConfigureMail($source.Id,$clone.CharacterName,[int[]]@(),[int[]]@(),($run.seconds*1000),"",$run.silver)
-            $m.state='sending_silver';$m.phaseAt=$now
-            $m.status="Acc chính đang gửi $($run.silver) Bạc tới $($clone.CharacterName)..."
-        }else{
-            $m.status="Đợi lượt gửi Bạc từ acc chính (đang cấp cho clone khác)..."
+            $m.inboxCleanTicks=0
+            $m.state='receiving_all_inbox';$m.phaseAt=$now
+            $m.status='Đang mở hòm thư nhận tất cả thư (Code + Bạc)...'
         }
         return
     }
 
-    # 4. State: sending_silver -> Wait for main account to finish mailing silver to clone
-    if($m.state -eq 'sending_silver'){
+    # 4. State: receiving_all_inbox -> Nhận sạch sành sanh tất cả thư trong hòm thư (InboxPendingAttachments == 0)
+    if($m.state -eq 'receiving_all_inbox'){
         $clone=Get-DistributionJob $m.id
         if(!$clone -or !(Test-DistributionSessionLive $clone)){
-            throw 'Game clone bị thoát trong lúc nhận Bạc.'
-        }
-        if(!$source.MailDone){
-            if(!$source.MailEnabled -and !$source.MailBusy){
-                throw ('Gửi Bạc từ acc chính thất bại: ' + $source.MailStatus)
-            }
-            if((($now-$m.phaseAt).TotalSeconds) -gt 90){
-                throw 'Quá thời gian gửi Bạc từ acc chính sang clone.'
-            }
-            return
-        }
-        if($source.MailBusy){return}
-        $m.silverSent=$true
-        $m.state='receiving_silver';$m.phaseAt=$now
-        $m.status="Đợi clone $($clone.CharacterName) nhận Bạc..."
-        $source.MailDone=$false
-        $run.lastSilverSentAt=$now
-        return
-    }
-
-    # 5. State: receiving_silver -> Wait for clone mailbox to receive silver
-    if($m.state -eq 'receiving_silver'){
-        $clone=Get-DistributionJob $m.id
-        if(!$clone -or !(Test-DistributionSessionLive $clone)){
-            throw 'Game clone bị thoát trong lúc nhận Bạc.'
+            throw 'Game clone bị thoát trong lúc nhận thư.'
         }
         if(!$clone.InboxEnabled -and !$clone.InboxBusy){
             throw ('Nhận thư trên clone thất bại: ' + $clone.InboxStatus)
         }
-        if(([long]$clone.InboxReceived -gt [long]$m.inboxBaseline) -or (($now-$m.phaseAt).TotalSeconds -gt 20)){
-            Set-DistributionInbox $clone $false
-            $m.state='buying_shop';$m.phaseAt=$now;$m.status='Đã nhận Bạc; bắt đầu mua Shop Vàng'
-            return
+        $elapsed=(($now-$m.phaseAt).TotalSeconds)
+        # Hòm thư sạch khi InboxPendingAttachments == 0 và đã nhận thư hoặc đã mở hòm thư trên 3s
+        $clean=($clone.InboxPendingAttachments -eq 0 -and ($clone.InboxReceived -gt $m.inboxBaseline -or $elapsed -ge 4))
+        if($clean){
+            $m.inboxCleanTicks++
+            if($m.inboxCleanTicks -ge 3 -or $elapsed -gt 25){
+                Set-DistributionInbox $clone $false
+                $m.state='buying_shop';$m.phaseAt=$now
+                $m.status='Đã nhận đủ toàn bộ thư (Code + Bạc); bắt đầu mua Shop Vàng'
+                return
+            }
+        }else{
+            $m.inboxCleanTicks=0
+            $pendingMsg=if($clone.InboxPendingAttachments -gt 0){" (còn $($clone.InboxPendingAttachments) thư có đồ)"}else{""}
+            $m.status="Đang nhận tất cả thư${pendingMsg}: $($clone.InboxStatus)"
+            if($elapsed -gt 45){
+                Set-DistributionInbox $clone $false
+                $m.state='buying_shop';$m.phaseAt=$now
+                $m.status='Hết thời gian đợi nhận thư; bắt đầu mua Shop Vàng'
+                return
+            }
         }
         return
     }
 
-    # 6. State: buying_shop -> Start gold shop purchase on clone
+    # 5. State: buying_shop -> Start gold shop purchase on clone (tất cả các clone mua đồng loạt)
     if($m.state -eq 'buying_shop'){
         $clone=Get-DistributionJob $m.id
         if(!$clone -or !(Test-DistributionSessionLive $clone)){
@@ -452,7 +446,7 @@ function Sync-ShopGoldMember($run, $m, $source, $now) {
         return
     }
 
-    # 7. State: purchasing -> Wait for purchase to finish
+    # 6. State: purchasing -> Wait for purchase to finish
     if($m.state -eq 'purchasing'){
         $clone=Get-DistributionJob $m.id
         if(!$clone -or !(Test-DistributionSessionLive $clone)){
@@ -460,20 +454,21 @@ function Sync-ShopGoldMember($run, $m, $source, $now) {
         }
         if(!$clone.GoldShopEnabled){
             if($clone.GoldShopBoughtTotal -gt 0){
-                $m.state='sending_mail';$m.phaseAt=$now;$m.status="Đã mua đủ $($clone.GoldShopBoughtTotal) món; đang gửi thư về $($run.receiverName)"
+                $m.state='sending_mail';$m.phaseAt=$now
+                $m.status="Đã mua đủ $($clone.GoldShopBoughtTotal) món; đang gửi thư về $($run.receiverName)"
             }else{
                 throw ('Không mua được đồ Shop Vàng: ' + $clone.GoldShopStatus)
             }
         }else{
             $m.status=$clone.GoldShopStatus
-            if((($now-$m.phaseAt).TotalSeconds) -gt 60){
+            if((($now-$m.phaseAt).TotalSeconds) -gt 90){
                 throw 'Quá thời gian mua Shop Vàng; dừng kiểm tra.'
             }
         }
         return
     }
 
-    # 8. State: sending_mail -> Clone mails purchased items back to main account
+    # 7. State: sending_mail -> Clone mails purchased items back to main account
     if($m.state -eq 'sending_mail'){
         $clone=Get-DistributionJob $m.id
         if(!$clone -or !(Test-DistributionSessionLive $clone)){
@@ -486,7 +481,7 @@ function Sync-ShopGoldMember($run, $m, $source, $now) {
         return
     }
 
-    # 9. State: mailing -> Wait for mail from clone to finish
+    # 8. State: mailing -> Wait for mail from clone to finish
     if($m.state -eq 'mailing'){
         $clone=Get-DistributionJob $m.id
         if(!$clone -or !(Test-DistributionSessionLive $clone)){
@@ -506,7 +501,7 @@ function Sync-ShopGoldMember($run, $m, $source, $now) {
         return
     }
 
-    # 10. State: closing -> Wait for clone process to exit
+    # 9. State: closing -> Wait for clone process to exit
     if($m.state -eq 'closing'){
         if($m.closeOperation -and !$m.closeOperation.Completed){return}
         $cloneJob=Get-AccountJob $m.job
@@ -545,16 +540,52 @@ function Sync-ShopGold {
         $run.receiverName=$source.CharacterName
     }
 
-    # Tự động bật nhận thư trên acc chính để thu hoạch đồ khi acc chính rảnh (không bận gửi Bạc)
-    $isSendingSilver=@($run.members | Where-Object {$_.state -eq 'sending_silver'}).Count -gt 0
+    # 2. Xử lý cấp Bạc liên tục từ acc chính sang các clone đang mở
+    if($run.silver -gt 0){
+        if($source.MailDone){
+            $source.MailDone=$false
+            $run.lastSilverSentAt=$now
+            if($run.currentSendingCloneId){
+                $sentClone=@($run.members | Where-Object {$_.id -eq $run.currentSendingCloneId}) | Select-Object -First 1
+                if($sentClone){
+                    $sentClone.silverDelivered=$true
+                }
+                $run.currentSendingCloneId=''
+            }
+        }
+        if(!$source.MailBusy -and !$source.MailEnabled){
+            $gap=if($run.lastSilverSentAt -and $run.lastSilverSentAt -ne [datetime]::MinValue){($now - $run.lastSilverSentAt).TotalSeconds}else{999}
+            $requiredGap=[Math]::Max(0,[double]$run.seconds)
+            if($gap -ge $requiredGap){
+                # Tìm clone tiếp theo cần cấp Bạc:
+                # Ưu tiên các clone đã xong Gift Code (waiting_silver_inbox), sau đó đến các clone khác vừa online
+                $targetCloneMember=@($run.members | Where-Object {
+                    !$_.silverDelivered -and !$_.silverSending -and $_.state -notin @('waiting','done','blocked','closing') -and ![string]::IsNullOrWhiteSpace($_.character)
+                }) | Sort-Object { if($_.state -eq 'waiting_silver_inbox'){0}else{1} } | Select-Object -First 1
+
+                if($targetCloneMember){
+                    if($source.InboxEnabled){
+                        Set-DistributionInbox $source $false
+                    }
+                    $targetCloneMember.silverSending=$true
+                    $run.currentSendingCloneId=$targetCloneMember.id
+                    $mailDelayMs=[Math]::Max(1000, [int]([Math]::Max(1, $run.seconds) * 1000))
+                    [TGLL.NativeBackend]::ConfigureMail($source.Id,$targetCloneMember.character,[int[]]@(),[int[]]@(),$mailDelayMs,"",$run.silver)
+                }
+            }
+        }
+    }
+
+    # 3. Thu hoạch đồ: Khi acc chính rảnh tay (không gửi Bạc), tự động bật nhận thư để thu hoạch
+    $isSendingSilver=$source.MailEnabled -or $source.MailBusy
     $hasItemsToHarvest=@($run.members | Where-Object {$_.state -in @('mailing','closing','done')}).Count -gt 0
-    if(!$isSendingSilver -and !$source.MailBusy -and !$source.MailEnabled -and $hasItemsToHarvest){
+    if(!$isSendingSilver -and $hasItemsToHarvest){
         if(!$source.InboxEnabled){
             Set-DistributionInbox $source $true
         }
     }
 
-    # 2. Xử lý đồng bộ từng member đang chạy
+    # 4. Xử lý đồng bộ từng member đang chạy (mỗi clone hoạt động riêng biệt song song)
     foreach($m in $run.members){
         if($m.state -notin @('waiting','done','blocked')){
             try{
@@ -566,10 +597,10 @@ function Sync-ShopGold {
         }
     }
 
-    # 3. Cập nhật con trỏ số lượng hoàn tất
+    # 5. Cập nhật con trỏ số lượng hoàn tất
     $run.cursor=@($run.members | Where-Object {$_.state -eq 'done'}).Count
 
-    # 4. Kiểm tra hoàn tất toàn bộ hàng chờ
+    # 6. Kiểm tra hoàn tất toàn bộ hàng chờ
     $remaining=@($run.members | Where-Object {$_.state -notin @('done','blocked')}).Count
     if($remaining -eq 0){
         $run.active=$false
@@ -578,8 +609,7 @@ function Sync-ShopGold {
         return
     }
 
-    # 5. Khởi chạy các clone mới trong danh sách chờ theo giới hạn maxOnline
-    # Tu dong thu lai sau 30 giay cho cac clone bi blocked do timeout / loi tam thoi
+    # 7. Khởi chạy các clone mới trong danh sách chờ theo giới hạn maxOnline
     foreach($m in $run.members){
         if($m.state -eq 'blocked' -and $m.phaseAt){
             if((($now - $m.phaseAt).TotalSeconds) -ge 30){
@@ -594,9 +624,6 @@ function Sync-ShopGold {
     $occupied=@($run.members | Where-Object {$_.state -notin @('waiting','done','blocked')}).Count
     $limit=if($shopGoldMax){[int]$shopGoldMax.Value}else{2}
     $budget=[Math]::Max(0, [int]$limit - $occupied)
-    if($launchConcurrency -and [int]$launchConcurrency.Value -gt 0){
-        $budget=[Math]::Min($budget, [int]$launchConcurrency.Value)
-    }
 
     foreach($m in $run.members){
         if($occupied -ge $limit -or $budget -le 0){break}

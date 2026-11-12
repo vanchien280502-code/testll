@@ -51,3 +51,47 @@ $inventoryFilter.Add_SelectedIndexChanged({$script:inventoryViewKey='';Update-In
 $inventorySearch.Add_TextChanged({$script:inventoryViewKey='';Update-InventoryUi})
 $grid.Add_SelectionChanged({Update-InventoryUi;if($tabs.SelectedTab -eq $inventoryPage){Request-InventoryUi}})
 $tabs.Add_SelectedIndexChanged({if($tabs.SelectedTab -eq $inventoryPage){Resize-InventoryUi;Update-InventoryUi;Request-InventoryUi}})
+
+function Add-SelectedItemToFilter {
+    if(!$inventoryGrid.SelectedRows.Count){return}
+    $item=$inventoryGrid.SelectedRows[0].Tag
+    if($null -eq $item -or $grid.SelectedRows.Count -eq 0){return}
+    $a=$grid.SelectedRows[0].Tag
+    $p=Get-ItemFilterPreference $a
+    $newIds=@($p.ids)
+    if($newIds -notcontains $item.TemplateId){$newIds+= [int]$item.TemplateId}
+    $a | Add-Member NoteProperty filterItemIds ([int[]]$newIds) -Force
+    if(!$UiTest){Save-Accounts};Sync-ItemFilterPreferences;Update-ItemFilterUi
+    $inventoryHint.Text="Đã thêm '"+$item.Name+"' (ID "+$item.TemplateId+") vào danh sách Lọc đồ."
+}
+function Drop-SelectedItemNow {
+    if(!$inventoryGrid.SelectedRows.Count){return}
+    $item=$inventoryGrid.SelectedRows[0].Tag
+    if($null -eq $item){return}
+    if($item.Locked){$inventoryHint.Text='Vật phẩm này đang bị KHÓA, không thể vứt bỏ.';return}
+    if($grid.SelectedRows.Count -eq 0){return}
+    $a=$grid.SelectedRows[0].Tag;$key=[string]$a.id
+    if(!$script:accountJobs.ContainsKey($key)){$inventoryHint.Text='Tài khoản chưa vào game.';return}
+    $j=Get-AccountJob $script:accountJobs[$key]
+    if($null -eq $j -or !$j.TrainReady){$inventoryHint.Text='Đợi nhân vật vào bản đồ game để vứt đồ.';return}
+    try{
+        [TGLL.NativeBackend]::DropItemNow($j.Id,$item.Slot) | Out-Null
+        $inventoryHint.Text="Đã gửi lệnh vứt '"+$item.Name+"' (ô "+$item.Slot+"). Bấm Đọc hành trang để cập nhật."
+    }catch{$inventoryHint.Text='Lỗi khi vứt đồ: '+$_.Exception.Message}
+}
+$invMenu=New-Object Windows.Forms.ContextMenuStrip
+$miAddFilter=$invMenu.Items.Add('Thêm vào danh sách Lọc đồ')
+$miAddFilter.Add_Click({Add-SelectedItemToFilter})
+$miDrop=$invMenu.Items.Add('Vứt bỏ món này ngay')
+$miDrop.Add_Click({Drop-SelectedItemNow})
+$inventoryGrid.ContextMenuStrip=$invMenu
+$inventoryGrid.Add_MouseDown({
+    param($s,$e)
+    if($e.Button -eq [Windows.Forms.MouseButtons]::Right){
+        $hit=$inventoryGrid.HitTest($e.X,$e.Y)
+        if($hit.RowIndex -ge 0){
+            $inventoryGrid.ClearSelection()
+            $inventoryGrid.Rows[$hit.RowIndex].Selected=$true
+        }
+    }
+})

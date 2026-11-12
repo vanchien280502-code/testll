@@ -8,4 +8,4 @@ for($selected=0;$selected -lt $tabs.TabPages.Count;$selected++){
     }
 }
 $tabs.SelectedIndex=$savedTabIndex
-Write-Output 'PASS: all 20 tabs keep their original position when selecting upper or lower rows.'
+Write-Output "PASS: all $($tabs.TabPages.Count) tabs keep their original position when selecting upper or lower rows."

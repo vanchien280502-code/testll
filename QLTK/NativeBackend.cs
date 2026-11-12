@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
@@ -1231,6 +1231,8 @@ namespace TGLL {
         public GoldShopItemRequest GoldShopCurrent;
         public long ChestData;
         public volatile bool AutoItemEnabled;public volatile int[] AutoItemIds=new int[0];internal int AutoItemCursor;public volatile int[] AutoItemOnceIds=new int[0];internal HashSet<int> AutoItemOnceAttempted=new HashSet<int>();public volatile int AutoItemId=-1,AutoItemIntervalMs=5000,AutoItemRequests;public volatile string AutoItemStatus="Tắt";internal DateTime AutoItemNext;
+        public volatile bool FilterItemEnabled;public volatile int[] FilterItemIds=new int[0];public volatile bool FilterWhiteEquip;public volatile string FilterItemStatus="Tắt";public volatile int FilterItemDroppedCount=0;public volatile int FilterItemIntervalMs=3000;internal DateTime FilterItemNext;internal string FilterItemLastDrop="";public readonly Queue<int> FilterDropQueue=new Queue<int>();
+        public volatile bool LuckyWheelEnabled;public volatile int LuckyWheelType=0;public volatile int LuckyWheelBatch=10;public volatile bool LuckyWheelOnlyTicket=true;public volatile int LuckyWheelMinFreeSlots=2;public volatile int LuckyWheelIntervalMs=400;public volatile string LuckyWheelStatus="Tắt";public volatile int LuckyWheelSpunCount=0;public volatile int[] LuckyWheelTicketIds=new int[]{706};internal DateTime LuckyWheelNext=DateTime.MinValue;internal int LuckyWheelLastTicketTotal=-1;public volatile int LuckyWheelPhase=0;internal int LuckyWheelLastSpunTicketCount=-1;internal int LuckyWheelStallCount=0;internal DateTime LuckyWheelPhaseAt=DateTime.MinValue;
         public volatile bool GiftEnabled;public volatile int GiftRequests;public volatile string GiftStatus="Tắt",GiftResponse="";
         internal readonly object GiftGate=new object();internal string[] GiftCodes=new string[0];internal readonly HashSet<string> GiftAttempted=new HashSet<string>(StringComparer.Ordinal);
         internal bool GiftWaiting,GiftResultWaiting;internal string GiftCurrent="",GiftPopupBefore="";internal DateTime GiftAt,GiftNext;internal HashSet<string> GiftNoticeSeen=new HashSet<string>();
@@ -1255,7 +1257,7 @@ namespace TGLL {
         internal PortalRightOperation SonCapReleaseOperation;internal bool SonCapReleaseAttempted;internal DateTime SonCapAutoRetryAt;internal int SonCapAutoRetries;internal bool SonCapAutoConfirmed,SonCapMapAutoActive;internal int SonCapAutoMap=-1;internal DateTime SonCapAutoSeenAt,SonCapAutoPollAt;
         internal int SonCapClearedStage=-1;internal bool SonCapApplying,SonCapStopPending,SonCapRebound;internal DateTime SonCapPollAt,SonCapMapAt,SonCapEmptyAt,SonCapRouteAt;
         public volatile bool UpRequested;public volatile bool FarmEnabled,FarmArrived,FarmQuietZone;internal bool FarmZoneWaiting;internal volatile bool FarmStopPending;public volatile int CharacterLevel;public volatile string FarmStatus="";public volatile FarmSpot[] FarmObserved=new FarmSpot[0];public volatile int FarmPositionMap=-1,FarmPositionX,FarmPositionY;public DateTime FarmPositionReadAt=DateTime.MinValue;internal FarmSpot[] FarmChoices=new FarmSpot[0];internal FarmSpot FarmTarget;internal bool FarmCharacterMode;internal int FarmLevel;internal DateTime FarmPollAt,FarmRouteAt,FarmStableAt,FarmZoneCheckAt;internal bool FarmRouteSent;
-        public volatile SkillInfo[] Skills=new SkillInfo[0];public volatile bool TrainEnabled,SkillScanRequested=true,TrainReady;public volatile int TrainSkillId=-1,TrainStatus,TrainAttempts,TrainTargetId=-1,TrainTargetHp;public volatile int[] HangingSkillIds=new[]{367,271,285,1};public int HangingSkillCursor;internal bool HangingAwaiting;internal DateTime HangingResultLogAt;internal int HangingLogStatus=Int32.MinValue,HangingLogSkill=-1;public int HangingRequests;internal DateTime LevelOneNextAt;internal int SkillGeneration,TrainCursor;internal bool TrainIdleApplied;public volatile bool ReceiveFlowActive;public volatile int[] TrainSkillIds=new int[0];internal long TaskPacketData;public volatile int TaskPacketOpcode;public volatile int TaskPacketPayload=-1;public volatile int TaskPacketPayload2=-1;public volatile int TaskPacketPayloadType=1;public volatile int MainTaskId=-1,MainStepId=-1,MainRequire=-1;
+        public volatile SkillInfo[] Skills=new SkillInfo[0];public volatile bool TrainEnabled,SkillScanRequested=true,TrainReady;public volatile int TrainSkillId=-1,TrainStatus,TrainAttempts,TrainTargetId=-1,TrainTargetHp;public volatile int[] HangingSkillIds=new[]{367,271,285,1};public int HangingSkillCursor;internal bool HangingAwaiting;internal DateTime HangingResultLogAt;internal int HangingLogStatus=Int32.MinValue,HangingLogSkill=-1;public int HangingRequests;internal DateTime LevelOneNextAt;internal int SkillGeneration,TrainCursor;internal bool TrainIdleApplied;public volatile bool ReceiveFlowActive;public volatile int[] TrainSkillIds=new int[0];internal long TaskPacketData;public volatile int TaskPacketOpcode;public volatile int TaskPacketPayload=-1;public volatile int TaskPacketPayload2=-1;public volatile int TaskPacketPayloadType=1;public volatile int MainTaskId=-1,MainStepId=-1,MainRequire=-1;internal long ActionData;public volatile int ActionClickCount;
 
         public volatile bool GameSettingsReady,GameAutoEnabled,GameAutoWanted;public volatile string GameAutoStatus="Chờ game sẵn sàng";public volatile int EntryAutoActivations;internal int EntryAutoOrigin=-1,EntryAutoKind,EntryCombatMap=-1;internal bool EntryAutoWaiting;internal DateTime EntryAutoAt;public volatile string SettingsError="";
         public volatile GameOption[] GameOptions=new GameOption[0];
@@ -1678,6 +1680,22 @@ namespace TGLL {
             NativeJob j=Get(id);if(j==null||!j.Auto||j.CloseRequested||j.CancelRequested)throw new Exception("auto_item_session_unavailable");
             if(j.CloakQueueOnly)enabled=false;j.AutoItemEnabled=false;j.AutoItemIds=new[]{templateId};j.AutoItemCursor=0;j.AutoItemId=templateId;j.AutoItemIntervalMs=intervalMs;j.AutoItemNext=DateTime.MinValue;j.AutoItemEnabled=enabled;j.AutoItemStatus=enabled?"Đợi game sẵn sàng":"Tắt";
         }
+        public static void ConfigureFilterItemPlan(string id,bool enabled,int[] ids,bool filterWhiteEquip,int intervalMs){
+            NativeJob j=Get(id);if(j==null)return;
+            j.FilterDropQueue.Clear();
+            j.FilterItemIds=ids!=null?(int[])ids.Clone():new int[0];
+            j.FilterWhiteEquip=filterWhiteEquip;
+            j.FilterItemIntervalMs=Math.Max(500,intervalMs);
+            j.FilterItemNext=DateTime.MinValue;
+            j.FilterItemEnabled=enabled;
+            if(!enabled)j.FilterItemStatus="Tắt";
+            else j.FilterItemStatus="Bật siêu tốc • Đã chọn "+j.FilterItemIds.Length+" ID";
+        }
+        public static bool DropItemNow(string id,int slot){
+            NativeJob j=Get(id);if(j==null||!j.TrainReady)return false;
+            SendTaskPacket(id,119,payload:slot,payloadType:5,payload2:0);
+            return true;
+        }
         internal static void PumpTaskPacket(Remote r,long data,NativeJob j){
             if(data==0||j.TaskPacketOpcode<=0)return;
             int state=BitConverter.ToInt32(r.Read(data,4),0);
@@ -1686,7 +1704,8 @@ namespace TGLL {
                 int payloadType = j.TaskPacketPayload >= 0 ? (j.TaskPacketPayloadType > 0 ? j.TaskPacketPayloadType : 1) : 0;
                 r.Write(data+8,BitConverter.GetBytes(payloadType));
                 if(payloadType > 0)r.Write(data+12,BitConverter.GetBytes(j.TaskPacketPayload));
-                if(payloadType == 4 || payloadType == 5)r.Write(data+16,BitConverter.GetBytes(j.TaskPacketPayload2));
+                if(j.TaskPacketPayload2 >= 0)r.Write(data+16,BitConverter.GetBytes(j.TaskPacketPayload2));
+                else r.Write(data+16,BitConverter.GetBytes(-1));
                 r.Write(data,BitConverter.GetBytes(1));
                 Log(j,"task_packet_sent",",\"opcode\":"+j.TaskPacketOpcode+",\"payload\":"+j.TaskPacketPayload+",\"payload2\":"+j.TaskPacketPayload2+",\"payload_type\":"+payloadType);
                 j.TaskPacketOpcode=0;
@@ -1698,6 +1717,22 @@ namespace TGLL {
         public static void SendTaskPacket(string id,int opcode,int payload=-1,int payloadType=1,int payload2=-1){
             NativeJob j=Get(id);if(j==null||!j.TrainReady)throw new Exception("game_session_unavailable");
             j.TaskPacketPayloadType=payloadType;j.TaskPacketPayload=payload;j.TaskPacketPayload2=payload2;j.TaskPacketOpcode=opcode;
+        }
+        internal static void PumpActionLog(Remote r,NativeJob j){
+            if(j.ActionData==0)return;
+            try{
+                int count=BitConverter.ToInt32(r.Read(j.ActionData+32,4),0);
+                if(count!=j.ActionClickCount){
+                    j.ActionClickCount=count;
+                    int opcode=BitConverter.ToInt32(r.Read(j.ActionData,4),0);
+                    int payloadLen=BitConverter.ToInt32(r.Read(j.ActionData+4,4),0);
+                    byte[] payloadBytes=r.Read(j.ActionData+8,8);
+                    string hex="";
+                    int len=Math.Min(Math.Max(0,payloadLen),8);
+                    for(int i=0;i<len;i++)hex+=payloadBytes[i].ToString("X2");
+                    Log(j,"user_packet_sent",",\"opcode\":"+opcode+",\"len\":"+payloadLen+",\"payload\":"+Quote(hex)+",\"count\":"+count);
+                }
+            }catch{}
         }
         public static int GetShopBuyId(string id,int templateId,bool lockedGold=false){
             NativeJob j=Get(id);if(j==null||j.ProcessId<=0)return -1;
@@ -1832,6 +1867,160 @@ namespace TGLL {
             if(!ready||DateTime.UtcNow<j.AutoItemNext)return;
             int next=NextAutoItem(j);if(next<0){j.AutoItemStatus="Đã dùng hết danh sách một lần; đợi phiên game mới";return;}j.AutoItemId=next;r.Write(data+4,BitConverter.GetBytes(j.AutoItemId));r.Write(data+24,BitConverter.GetBytes(1));r.Write(data+8,new byte[4]);r.Write(data,BitConverter.GetBytes(1));j.AutoItemNext=DateTime.UtcNow.AddMilliseconds(j.AutoItemIntervalMs);
         }
+        internal static void PumpFilterItem(Remote r,long game,NativeJob j,Func<InventorySnapshot> bagReader){
+            if(!j.FilterItemEnabled||j.CloseRequested||j.CancelRequested||!j.TrainReady)return;
+            DateTime now=DateTime.UtcNow;
+            if(now<j.FilterItemNext)return;
+            if(j.GemBusy||j.GemItemPause)return;
+            try{
+                if(j.FilterDropQueue.Count>0){
+                    if(j.TaskPacketOpcode>0)return;
+                    int slot=j.FilterDropQueue.Dequeue();
+                    SendTaskPacket(j.Id,119,payload:slot,payloadType:5,payload2:0);
+                    j.FilterItemDroppedCount++;
+                    j.FilterItemStatus="Đang vứt liền tay: còn "+j.FilterDropQueue.Count+" món • Tổng: "+j.FilterItemDroppedCount;
+                    j.FilterItemNext=now.AddMilliseconds(70);
+                    return;
+                }
+                InventorySnapshot bag=bagReader==null?ReadInventorySnapshot(r,game):bagReader();
+                if(bag==null||!bag.Ready||bag.Items==null||bag.Items.Length==0){
+                    j.FilterItemNext=now.AddMilliseconds(200);
+                    return;
+                }
+                var filterSet=new HashSet<int>(j.FilterItemIds??new int[0]);
+                int found=0;
+                foreach(var item in bag.Items){
+                    if(item==null)continue;
+                    if(item.Locked)continue;
+                    if(item.TemplateId>=4&&item.TemplateId<=11)continue;
+                    bool matchId=filterSet.Contains(item.TemplateId);
+                    bool matchWhite=j.FilterWhiteEquip&&item.Equipment&&(item.Type>=0&&item.Type<=9);
+                    if(matchId||matchWhite){
+                        j.FilterDropQueue.Enqueue(item.Slot);
+                        j.FilterItemLastDrop=item.Name+" (ID: "+item.TemplateId+")";
+                        found++;
+                    }
+                }
+                if(found>0){
+                    if(j.TaskPacketOpcode<=0){
+                        int slot=j.FilterDropQueue.Dequeue();
+                        SendTaskPacket(j.Id,119,payload:slot,payloadType:5,payload2:0);
+                        j.FilterItemDroppedCount++;
+                        j.FilterItemStatus="Đang vứt liền tay "+found+" món... • Tổng: "+j.FilterItemDroppedCount;
+                        Log(j,"filter_item_drop_batch",",\"count\":"+found+",\"first_slot\":"+slot);
+                        j.FilterItemNext=now.AddMilliseconds(70);
+                    }
+                }else{
+                    j.FilterItemStatus=j.FilterItemDroppedCount>0?"Túi đồ sạch • Đã vứt "+j.FilterItemDroppedCount+" món":"Đang canh vứt đồ • Túi trống rác";
+                    j.FilterItemNext=now.AddMilliseconds(Math.Min(350,Math.Max(100,j.FilterItemIntervalMs)));
+                }
+            }catch{}
+        }
+        public static void ConfigureLuckyWheel(string id,bool enabled,int wheelType=0,int batch=10,bool onlyTicket=true,int minFreeSlots=2,int intervalMs=400,int[] ticketIds=null){
+            NativeJob j=Get(id);if(j==null)return;
+            j.LuckyWheelEnabled=enabled;
+            j.LuckyWheelType=wheelType;
+            j.LuckyWheelBatch=batch<=1?1:10;
+            j.LuckyWheelOnlyTicket=onlyTicket;
+            j.LuckyWheelMinFreeSlots=Math.Max(0,minFreeSlots);
+            j.LuckyWheelIntervalMs=Math.Max(100,intervalMs);
+            if(ticketIds!=null&&ticketIds.Length>0)j.LuckyWheelTicketIds=ticketIds;
+            if(!enabled){j.LuckyWheelStatus="Tắt";j.LuckyWheelPhase=0;}
+            else{j.LuckyWheelStatus="Đã bật • Chờ quay";j.LuckyWheelPhase=0;j.LuckyWheelStallCount=0;j.LuckyWheelLastSpunTicketCount=-1;}
+        }
+        public static int GetLuckyWheelTicketCount(string id){
+            NativeJob j=Get(id);if(j==null||j.Inventory==null||!j.Inventory.Ready)return 0;
+            return CountTickets(j.Inventory,j.LuckyWheelTicketIds);
+        }
+        internal static int CountTickets(InventorySnapshot bag,int[] ticketIds){
+            if(bag==null||bag.Items==null)return 0;
+            int[] validIds=(ticketIds!=null&&ticketIds.Length>0)?ticketIds:new int[]{706};
+            int total=0;
+            foreach(var item in bag.Items){
+                if(item==null||item.Quantity<=0)continue;
+                if(Array.IndexOf(validIds,item.TemplateId)>=0){
+                    total+=item.Quantity;
+                }
+            }
+            return total;
+        }
+        public static void SpinLuckyWheelNow(string id,int batch=10){
+            NativeJob j=Get(id);if(j==null||!j.TrainReady)throw new Exception("game_session_unavailable");
+            int b=batch<=1?1:10;
+            int payload = (j.LuckyWheelType == 1) ? 14 : (j.LuckyWheelType == 2 ? 15 : 13);
+            int payload2 = (j.LuckyWheelType == 1) ? 6 : (j.LuckyWheelType == 2 ? 7 : 5);
+            j.MenuOptions=new string[0];
+            j.DynamicMenuConfirmRequested=false;
+            SendTaskPacket(j.Id,144,payload:payload,payloadType:1,payload2:payload2);
+            j.LuckyWheelSpunCount+=b;
+            j.LuckyWheelStatus="Đã gửi quay x"+b+" thủ công";
+        }
+        internal static void PumpLuckyWheel(Remote r,long data,long taskPacketData,long game,NativeJob j,Func<InventorySnapshot> bagReader=null,DateTime? clock=null){
+            if(!j.LuckyWheelEnabled||j.CloseRequested||j.CancelRequested||!j.TrainReady)return;
+            DateTime now=clock??DateTime.UtcNow;
+            if(j.TaskPacketOpcode>0||j.FilterDropQueue.Count>0){
+                j.LuckyWheelStatus="Đang vứt đồ rác ("+j.FilterDropQueue.Count+" món)...";
+                return;
+            }
+            if(now<j.LuckyWheelNext)return;
+            InventorySnapshot bag=bagReader==null?j.Inventory:bagReader();
+            if(bag==null||!bag.Ready||bag.Capacity<=0){
+                try{bag=ReadInventorySnapshot(r,game);j.Inventory=bag;}catch{j.LuckyWheelStatus="Đợi đọc hành trang...";return;}
+            }
+            int freeSlots=bag.Capacity-bag.Items.Length;
+            if(freeSlots<j.LuckyWheelMinFreeSlots){
+                j.LuckyWheelStatus="Túi đầy (còn "+freeSlots+" ô trống) • Đợi lọc đồ vứt...";
+                j.LuckyWheelNext=now.AddMilliseconds(300);
+                return;
+            }
+            int ticketCount=CountTickets(bag,j.LuckyWheelTicketIds);
+            j.LuckyWheelLastTicketTotal=ticketCount;
+            if(j.LuckyWheelOnlyTicket&&ticketCount<=0){
+                j.LuckyWheelEnabled=false;
+                j.LuckyWheelStatus="Hết Vé may mắn • Tự dừng an toàn (đã quay "+j.LuckyWheelSpunCount+" lượt)";
+                Log(j,"lucky_wheel_stopped_no_tickets",",\"spun\":"+j.LuckyWheelSpunCount);
+                return;
+            }
+
+            // Tự động phát hiện và chọn menu 'Chọn loại vòng quay' khi xuất hiện
+            string[] opts=j.MenuOptions;
+            if(opts!=null&&opts.Length>0){
+                int targetIdx=-1;
+                for(int i=0;i<opts.Length;i++){
+                    if(opts[i].IndexOf("vòng quay",StringComparison.OrdinalIgnoreCase)>=0||
+                       opts[i].IndexOf("vận may",StringComparison.OrdinalIgnoreCase)>=0){
+                        if(j.LuckyWheelType==1&&opts[i].IndexOf("bạc",StringComparison.OrdinalIgnoreCase)>=0){targetIdx=i;break;}
+                        if(j.LuckyWheelType==0&&(opts[i].IndexOf("vàng",StringComparison.OrdinalIgnoreCase)>=0||opts[i].IndexOf("vé",StringComparison.OrdinalIgnoreCase)>=0)){targetIdx=i;break;}
+                    }
+                }
+                if(targetIdx>=0){
+                    SelectDynamicMenuIndex(j.Id,targetIdx);
+                    j.NpcAction=5;
+                    j.MenuOptions=new string[0];
+                    j.DynamicMenuJson="";
+                    if(data!=0){
+                        try{r.Write(data+2180,BitConverter.GetBytes(0));}catch{}
+                    }
+                    j.LuckyWheelNext=now.AddMilliseconds(500);
+                    j.LuckyWheelStatus="Đã tự chọn "+opts[targetIdx]+" • Đang mở bảng quay...";
+                    Log(j,"lucky_wheel_menu_selected",",\"index\":"+targetIdx);
+                    return;
+                }
+            }
+
+            // Gửi lệnh quay
+            int batch=j.LuckyWheelBatch;
+            if(j.LuckyWheelOnlyTicket&&ticketCount<batch){
+                batch=1;
+            }
+            int payload = (j.LuckyWheelType == 1) ? 14 : (j.LuckyWheelType == 2 ? 15 : 13);
+            int payload2 = (j.LuckyWheelType == 1) ? 6 : (j.LuckyWheelType == 2 ? 7 : 5);
+            SendTaskPacket(j.Id,144,payload:payload,payloadType:1,payload2:payload2);
+            j.LuckyWheelSpunCount+=1;
+            j.LuckyWheelNext=now.AddMilliseconds(j.LuckyWheelIntervalMs);
+            j.LuckyWheelStatus="Đang quay ("+(j.LuckyWheelType==0?"Vàng":(j.LuckyWheelType==1?"Bạc":"Ma quái"))+") • Còn "+ticketCount+" vé • Đã quay "+j.LuckyWheelSpunCount+" lượt";
+            Log(j,"lucky_wheel_spun",",\"type\":"+j.LuckyWheelType+",\"opcode\":144,\"sub_opcode\":"+payload+",\"action_code\":"+payload2+",\"remaining_tickets\":"+ticketCount);
+        }
         static long ResolvedClass(Remote r,long slot){long p=r.Ptr(slot);if(p==0||(p&1)!=0)throw new Exception("inventory_not_ready");return p;}
         static byte[] InventoryArray(Remote r,long p,int max,out int count){
             if(p==0)throw new Exception("inventory_not_ready");long n=r.Ptr(p+24);if(n<0||n>max)throw new Exception("inventory_invalid_array");count=(int)n;return r.Read(p+32,count*8);
@@ -1890,7 +2079,7 @@ namespace TGLL {
             }
             byte[] menu=r.Read(data+2176,24);int mg=BitConverter.ToInt32(menu,0),count=BitConverter.ToInt32(menu,4);
             if(count<=0||mg==0||(mg&1)!=0||count>128){
-                if(j.MenuOptions.Length>0&&j.NpcAction==5){j.MenuOptions=new string[0];j.DynamicMenuJson="";}
+                if(j.MenuOptions.Length>0&&(j.NpcAction==5||j.LuckyWheelEnabled)){j.MenuOptions=new string[0];j.DynamicMenuJson="";}
                 return;
             }
             byte[] entries=r.Read(data+2240,count*8);if(BitConverter.ToInt32(r.Read(data+2176,4),0)!=mg)return;
@@ -2140,6 +2329,8 @@ namespace TGLL {
         }
         internal static int HangingSkillIntervalMs(NativeJob j){return CuongThiControlsAuto(j)?500:10;}
         internal static int TrainingPollMs(NativeJob j){
+            if(j.FilterItemEnabled&&j.FilterDropQueue.Count>0)return 35;
+            if(j.LuckyWheelEnabled)return 50;
             if(j.ThiQuyCombatActive||CuongThiControlsAuto(j))return 150;if(HangingLevelOne(j)!=null)return 10;if(j.QuestEnabled)return 150;
             if(j.TrainEnabled&&!j.ReceiveFlowActive&&!j.ReceiveKeyRequested&&!j.ReplayRequested){
                 foreach(SkillInfo skill in j.Skills)if(skill.Level==1&&skill.Usable&&Array.IndexOf(j.TrainSkillIds,skill.Id)>=0)return 50;
@@ -3248,6 +3439,21 @@ namespace TGLL {
                     followCode=r.Allocate(4096);byte[] followBytes=NativeCode.Follow(teamData+1024,game,game+0x1dd900);if(followBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(followCode,followBytes);r.Protect(followCode,4096,0x20);
                     zoneCode=r.Allocate(4096);byte[] zoneBytes=NativeCode.Zone(teamData+2048,game,game+0x1dd900);if(zoneBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(zoneCode,zoneBytes);r.Protect(zoneCode,4096,0x20);
                     taskPacketData=r.Allocate(4096);j.TaskPacketData=taskPacketData;long taskPacketCode=r.Allocate(4096);byte[] taskPacketBytes=NativeCode.TaskPacket(taskPacketData,game);if(taskPacketBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(taskPacketCode,taskPacketBytes);r.Protect(taskPacketCode,4096,0x20);
+                    long sendDispatch=game+0x4340;byte[] sendPrefix=r.Read(sendDispatch,16);
+                    byte[] expectedSendPrefix={0x48,0x8b,0x02,0x4d,0x8b,0xd0,0x44,0x0f,0xb7,0xc9,0x4c,0x8b,0xda,0x4d,0x03,0xc9};
+                    bool sendPrefixOk=true;for(int n=0;n<16;n++)if(sendPrefix[n]!=expectedSendPrefix[n]){sendPrefixOk=false;break;}
+                    if(sendPrefixOk){
+                        long actionData=r.Allocate(4096);j.ActionData=actionData;
+                        long sendTrampoline=r.Near(sendDispatch,4096);
+                        byte[] sendBytes=NativeCode.SendHook(actionData,sendDispatch+16);
+                        r.Write(sendTrampoline,sendBytes);r.Protect(sendTrampoline,4096,0x20);
+                        byte[] sendPatch=new byte[16];for(int n=0;n<16;n++)sendPatch[n]=0x90;sendPatch[0]=0xe9;
+                        Array.Copy(BitConverter.GetBytes(checked((int)(sendTrampoline-sendDispatch-5))),0,sendPatch,1,4);
+                        r.Suspended(delegate{r.Install(sendDispatch,sendPatch);});
+                        Log(j,"send_hook_installed",",\"addr\":\""+sendDispatch.ToString("X")+"\"");
+                    }else{
+                        Log(j,"send_hook_failed",",\"prefix\":"+Quote(BitConverter.ToString(sendPrefix)));
+                    }
                     loginCode=trampoline+128;byte[] loginBytes=NativeCode.Login(data,game+0x16ee778,trampoline,game+0x161150,game+0x2fced0,game+0x2bc700,characterCode,trainCode,settingsCode,teamCode,followCode,zoneCode,itemCode,questCode,travelItemCode,travelMenuCode,giftCode,mailCode,inboxCode,farmCode,chestCode,cloakCode,marketCode,reminderCode,gemCode,captchaCode,cuongRouteCode,cuongZoneCode,taskPacketCode,speedCode);r.Write(loginCode,loginBytes);r.Protect(trampoline,4096,0x20);
                     patch=new byte[16];for(int i=0;i<16;i++)patch[i]=0x90;patch[0]=0xe9;Array.Copy(BitConverter.GetBytes(checked((int)(loginCode-update-5))),0,patch,1,4);
                 }
@@ -3302,8 +3508,9 @@ namespace TGLL {
                     if(j.CurseActive||j.CaptchaFrame!=null)PumpCaptcha(keep,game,j);if(j.CurseActive){if(npcTimer.IsRunning){npcTimer.Stop();captchaNpcPaused=true;}Thread.Sleep(150);continue;}if(captchaNpcPaused){npcTimer.Start();captchaNpcPaused=false;}
                     if(j.CancelRequested&&npcTimer.IsRunning){CancelTravel(keep,j);j.ReceiveKeyEnabled=false;j.DungeonHighEnabled=false;j.IzanamiEnabled=false;j.IzanamiRequested=false;j.DungeonStartAt=DateTime.MinValue;j.ReceiveKeyRequested=false;j.ReplayRequested=false;j.ReceiveFlowActive=false;j.TrainEnabled=false;keep.Write(data,BitConverter.GetBytes(12));npcTimer.Reset();j.State="cancelled";j.Error="cancelled";}
                     if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){PumpActivityRetry(keep,data,questData,j,npcTimer);PumpQuest(keep,questData,j);PumpCuongThiMovement(keep,game,j);PumpCuongThi(keep,game,j);PumpGameSettings(keep,settingsData,j);}
-                    PumpThiQuyPriority(keep,game,trainData,j);PumpTraining(keep,trainData,j);
-                    if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){maintenance.Restart();PumpTaskPacket(keep,taskPacketData,j);PumpGemCombine(keep,gemData,game,j,autoItemData:itemData);PumpMarket(keep,marketData,game,j);PumpVitals(keep,game,j);PumpFarm(keep,farmData,game,j);if(j.InboxEnabled||j.InboxBusy)PumpInbox(keep,inboxData,game,j);if(j.MailEnabled||j.MailBusy)PumpMail(keep,mailData,game,j);PumpSonCap(keep,game,farmData,j);PumpSonCapMapAuto(keep,game,data,settingsData,j,npcTimer);PumpIzanamiMapAuto(keep,game,data,j,npcTimer);PumpIzanamiTravel(keep,data,j,npcTimer);if(j.GiftEnabled||j.GiftWaiting||j.GiftResultWaiting)PumpGiftCodes(keep,giftData,game,j);PumpCloak(keep,cloakData,game,j);PumpStoneChest(keep,chestData,itemData,game,j);if(j.GoldShopEnabled)PumpGoldShop(keep,chestData,game,j);PumpAutoItem(keep,itemData,j);PumpInventory(keep,game,j);PumpBiMa(keep,game,j);PumpTeam(keep,game,teamData,j);PumpZones(keep,game,teamData+2048,j);PumpFollow(keep,game,teamData+1024,j);
+                    PumpThiQuyPriority(keep,game,trainData,j);PumpTraining(keep,trainData,j);PumpActionLog(keep,j);
+                    if(j.TaskPacketOpcode>0||(j.FilterItemEnabled&&j.FilterDropQueue.Count>0)||j.LuckyWheelEnabled){PumpTaskPacket(keep,taskPacketData,j);if(j.FilterItemEnabled)PumpFilterItem(keep,game,j,null);if(j.LuckyWheelEnabled)PumpLuckyWheel(keep,data,taskPacketData,game,j);}
+                    if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){maintenance.Restart();PumpTaskPacket(keep,taskPacketData,j);PumpGemCombine(keep,gemData,game,j,autoItemData:itemData);PumpMarket(keep,marketData,game,j);PumpVitals(keep,game,j);PumpFarm(keep,farmData,game,j);if(j.InboxEnabled||j.InboxBusy)PumpInbox(keep,inboxData,game,j);if(j.MailEnabled||j.MailBusy)PumpMail(keep,mailData,game,j);PumpSonCap(keep,game,farmData,j);PumpSonCapMapAuto(keep,game,data,settingsData,j,npcTimer);PumpIzanamiMapAuto(keep,game,data,j,npcTimer);PumpIzanamiTravel(keep,data,j,npcTimer);if(j.GiftEnabled||j.GiftWaiting||j.GiftResultWaiting)PumpGiftCodes(keep,giftData,game,j);PumpCloak(keep,cloakData,game,j);PumpStoneChest(keep,chestData,itemData,game,j);if(j.GoldShopEnabled)PumpGoldShop(keep,chestData,game,j);if(j.LuckyWheelEnabled)PumpLuckyWheel(keep,data,taskPacketData,game,j);PumpAutoItem(keep,itemData,j);if(j.FilterItemEnabled)PumpFilterItem(keep,game,j,null);PumpInventory(keep,game,j);PumpBiMa(keep,game,j);PumpTeam(keep,game,teamData,j);PumpZones(keep,game,teamData+2048,j);PumpFollow(keep,game,teamData+1024,j);
                     ReadDiagnostics(keep,data,j);PumpIzanamiAttemptLimit(keep,game,j);PumpDungeonCycle(keep,data,game,j,npcTimer);PumpReceiveKey(keep,data,j,npcTimer,game);if(j.ReplayRequested){Replay(keep,data,j);npcTimer.Restart();}
                     if(j.DynamicMenuConfirmRequested){j.DynamicMenuConfirmRequested=false;keep.Write(data+3296,BitConverter.GetBytes(j.DynamicMenuTargetIndex));keep.Write(data+3280,BitConverter.GetBytes(j.DynamicMenuAction));keep.Write(data,BitConverter.GetBytes(9));npcTimer.Restart();Log(j,"menu_confirm_requested",",\"action\":"+j.DynamicMenuAction+",\"index\":"+j.DynamicMenuTargetIndex);}
                     if(j.NpcQuestRequested&&!j.ReceiveFlowActive){j.NpcQuestRequested=false;int act=j.NpcAction>0?j.NpcAction:4;j.NpcAction=act;j.ReceiveFlowActive=true;j.TrainEnabled=false;j.NpcId=-1;j.NpcTemplateId=-1;keep.Write(data+3296,BitConverter.GetBytes(j.DynamicMenuTargetIndex));keep.Write(data+3280,BitConverter.GetBytes(act));keep.Write(data+28,BitConverter.GetBytes(-1));keep.Write(data+32,new byte[4]);keep.Write(data,BitConverter.GetBytes(8));npcTimer.Restart();j.Stage="npc";j.State="finding_npc";Log(j,"npc_search_start","");}
@@ -3311,7 +3518,7 @@ namespace TGLL {
                         if(state==11){FinishNpcAction(keep,data,j,npcTimer);}
                         else if(npcTimer.ElapsedMilliseconds>60000){j.ReceiveFlowActive=false;j.Error=state==8?(j.NpcAction==2?"onoki_not_found":"npc_not_found"):state==13||state==14||state==15||state==17?"startup_popup_not_ready":(j.NpcAction==2?"npc_izanami_menu_not_ready":j.NpcAction==1?"npc_dungeon_menu_not_ready":"npc_key_menu_not_ready");j.State=j.NpcAction==2?"izanami_unavailable":"npc_unavailable";keep.Write(data,BitConverter.GetBytes(12));npcTimer.Stop();}}
                     }
-                }catch(Exception e){if((DateTime.UtcNow-j.WorkerErrorAt).TotalSeconds>=5){j.WorkerErrorAt=DateTime.UtcNow;Log(j,"worker_error",",\"type\":"+Quote(e.GetType().Name));}}}Thread.Sleep(TrainingPollMs(j));}}catch{}finally{lock(j.MailGate){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus="Game đã thoát";j.MailEnabled=false;j.MailStatus=j.MailBusy?"Game đã thoát khi đang gửi; kiểm tra thư trước khi chạy lại":"Game đã thoát";j.MailBusy=false;}RecordBiMaClosed(j,"process_exit");j.CuongThiEnabled=false;j.CuongThi=null;j.CuongThiNavigationReady=false;j.CuongThiMovementStopping=false;j.CuongThiRouteSent=false;j.CuongThiRouteStatus="Game đã thoát";j.CuongThiRouteData=0;j.CuongThiZoneData=0;j.CuongThiDestination=null;j.CuongThiDestinationKey="";j.CuongThiStatus="Game đã thoát";j.GemEnabled=false;j.GemBusy=false;j.GemItemPause=false;j.GemStatus="Game đã thoát";j.GiftEnabled=false;j.GiftStatus="Game đã thoát";j.QuestEnabled=false;j.QuestPauseAuto=false;j.QuestStatus="Game đã thoát";j.AutoItemEnabled=false;j.AutoItemStatus="Game đã thoát";j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestEnabled=false;j.ChestUseOwned=false;j.ChestStatus=j.ChestPhase==2?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestData=0;j.GoldShopEnabled=false;j.GoldShopStatus="Game đã thoát";j.ThiQuyCombatActive=false;j.ThiQuyPriorityArmed=false;j.ThiQuyNativeMode=0;j.ThiQuyFarmPaused=false;j.ThiQuyReadSuspended=false;j.ThiQuyMissingAt=DateTime.MinValue;j.ThiQuyPriorityAt=DateTime.MinValue;j.CurseActive=false;j.CurseReadAt=DateTime.MinValue;j.ZoneSyncActive=false;j.MapId=-1;j.ZoneId=-1;j.ZoneReadAt=DateTime.MinValue;j.ZonePrepared=false;j.ZoneStatus="";j.FollowActive=false;j.FollowStatus="";j.Vitals=null;j.CharacterName="";j.TeamMembers=new string[0];j.TeamConfirmed=false;j.InventoryScanning=false;j.Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"game_exited",DateTime.MinValue);j.FarmEnabled=false;j.FarmArrived=false;j.FarmStatus="Game đã thoát";j.GameSettingsReady=false;j.GameAutoEnabled=false;j.TrainReady=false;j.TrainEnabled=false;if(keepRelay!=null)keepRelay.Dispose();keep.Dispose();p.Dispose();}});lifetime.IsBackground=true;lifetime.Start();
+                }catch(Exception e){if((DateTime.UtcNow-j.WorkerErrorAt).TotalSeconds>=5){j.WorkerErrorAt=DateTime.UtcNow;Log(j,"worker_error",",\"type\":"+Quote(e.GetType().Name));}}}Thread.Sleep(TrainingPollMs(j));}}catch{}finally{lock(j.MailGate){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus="Game đã thoát";j.MailEnabled=false;j.MailStatus=j.MailBusy?"Game đã thoát khi đang gửi; kiểm tra thư trước khi chạy lại":"Game đã thoát";j.MailBusy=false;}RecordBiMaClosed(j,"process_exit");j.CuongThiEnabled=false;j.CuongThi=null;j.CuongThiNavigationReady=false;j.CuongThiMovementStopping=false;j.CuongThiRouteSent=false;j.CuongThiRouteStatus="Game đã thoát";j.CuongThiRouteData=0;j.CuongThiZoneData=0;j.CuongThiDestination=null;j.CuongThiDestinationKey="";j.CuongThiStatus="Game đã thoát";j.GemEnabled=false;j.GemBusy=false;j.GemItemPause=false;j.GemStatus="Game đã thoát";j.GiftEnabled=false;j.GiftStatus="Game đã thoát";j.QuestEnabled=false;j.QuestPauseAuto=false;j.QuestStatus="Game đã thoát";j.AutoItemEnabled=false;j.AutoItemStatus="Game đã thoát";j.FilterItemEnabled=false;j.FilterItemStatus="Game đã thoát";j.LuckyWheelEnabled=false;j.LuckyWheelStatus="Game đã thoát";j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestEnabled=false;j.ChestUseOwned=false;j.ChestStatus=j.ChestPhase==2?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestData=0;j.GoldShopEnabled=false;j.GoldShopStatus="Game đã thoát";j.ThiQuyCombatActive=false;j.ThiQuyPriorityArmed=false;j.ThiQuyNativeMode=0;j.ThiQuyFarmPaused=false;j.ThiQuyReadSuspended=false;j.ThiQuyMissingAt=DateTime.MinValue;j.ThiQuyPriorityAt=DateTime.MinValue;j.CurseActive=false;j.CurseReadAt=DateTime.MinValue;j.ZoneSyncActive=false;j.MapId=-1;j.ZoneId=-1;j.ZoneReadAt=DateTime.MinValue;j.ZonePrepared=false;j.ZoneStatus="";j.FollowActive=false;j.FollowStatus="";j.Vitals=null;j.CharacterName="";j.TeamMembers=new string[0];j.TeamConfirmed=false;j.InventoryScanning=false;j.Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"game_exited",DateTime.MinValue);j.FarmEnabled=false;j.FarmArrived=false;j.FarmStatus="Game đã thoát";j.GameSettingsReady=false;j.GameAutoEnabled=false;j.TrainReady=false;j.TrainEnabled=false;if(keepRelay!=null)keepRelay.Dispose();keep.Dispose();p.Dispose();}});lifetime.IsBackground=true;lifetime.Start();
             }catch(Exception startupError){
                 bool stopped=true;
                 if(p!=null){try{if(!p.HasExited){p.Kill();stopped=p.WaitForExit(3000);}}catch{stopped=false;}finally{p.Dispose();}}
@@ -4041,10 +4248,22 @@ namespace TGLL {
             a.Emit(0x48,0x8b,0x06,0x48,0x8b,0x90,0xa0,2,0,0,0x48,0x89,0xf1,0xff,0x90,0x98,2,0,0,0xc7,0x43,24,3,0,0,0);
             a.Label("sent");a.Emit(0xff,0x43,16);a.Label("done");a.Emit(0xc7,0x03,0,0,0,0);a.Label("return");a.Emit(0x48,0x83,0xc4,0x28,0x5e,0x5b,0xc3);return a.Finish();
         }
-        internal static byte[] TaskPacket(long data,long game){return TaskPacketCore(data,game+0x16ee820,game+0x16f760,game+0x2e2aa0,game+0x1dd900);}
-        internal static byte[] TaskPacketCore(long data,long serviceSlot,long allocate,long ctor,long initialize){
+        internal static byte[] TaskPacket(long data,long game){return TaskPacketCore(data,game+0x16ee820,game+0x16f760,game+0x2e2aa0,game+0x1dd900,game+0x16ee888,game+0x4340,game+0x2e29a0);}
+        internal static byte[] TaskPacketCore(long data,long serviceSlot,long allocate,long ctor,long initialize,long sessionSlot=0,long sendMessageThunk=0,long factory90=0){
             Code64 a=new Code64();a.Emit(0x53,0x56,0x48,0x83,0xec,0x28,0x48,0xbb);a.Q(data);
             a.Emit(0x83,0x3b,1);a.J(0x85,"return");a.Emit(0xc7,0x03,2,0,0,0);
+            if(factory90!=0){
+                a.Emit(0x8b,0x43,4);
+                a.Emit(0x3d,0x90,0,0,0);
+                a.J(0x85,"normal_packet");
+                a.Emit(0x8a,0x4b,12);
+                a.Emit(0x33,0xd2);
+                a.Call(factory90);
+                a.Emit(0x48,0x85,0xc0);a.J(0x84,"failed");
+                a.Emit(0x48,0x89,0xc6);
+                a.Jump("send");
+                a.Label("normal_packet");
+            }
             Slot(a,serviceSlot,"failed",initialize);a.Emit(0x48,0x89,0xc1);a.Call(allocate);
             a.Emit(0x48,0x85,0xc0);a.J(0x84,"failed");
             a.Emit(0x48,0x89,0xc6,0x48,0x89,0xc1,0x8b,0x53,4,0x45,0x33,0xc0);a.Call(ctor);
@@ -4068,11 +4287,67 @@ namespace TGLL {
             a.Jump("send");
             a.Label("short_byte");
             a.Emit(0x48,0x8b,0x06,0x4c,0x8b,0x80,0x50,2,0,0,0x48,0x89,0xf1,0x8b,0x53,12,0xff,0x90,0x48,2,0,0);
-            a.Emit(0x48,0x8b,0x06,0x4c,0x8b,0x80,0x30,2,0,0,0x48,0x89,0xf1,0x8b,0x53,16,0xff,0x90,0x28,2,0,0);
+            a.Emit(0x48,0x8b,0x06,0x4c,0x8b,0x80,0x20,2,0,0,0x48,0x89,0xf1,0x8b,0x53,16,0xff,0x90,0x18,2,0,0);
             a.Label("send");
+            if(sessionSlot!=0&&sendMessageThunk!=0){
+                a.Rax(sessionSlot);
+                a.Emit(0x48,0x8b,0x00);
+                a.Emit(0x48,0x85,0xc0);a.J(0x84,"cleanup");
+                if(initialize!=0){
+                    string ready="init_ready_"+a.Bytes.Count;
+                    a.Emit(0x83,0xb8,0xe0,0,0,0,0);
+                    a.J(0x85,ready);
+                    a.Emit(0x48,0x89,0xc1);
+                    a.Call(initialize);
+                    a.Rax(sessionSlot);a.Emit(0x48,0x8b,0x00);
+                    a.Emit(0x48,0x85,0xc0);a.J(0x84,"cleanup");
+                    a.Label(ready);
+                }
+                a.Emit(0x48,0x8b,0x80,0xb8,0,0,0);
+                a.Emit(0x48,0x85,0xc0);a.J(0x84,"cleanup");
+                a.Emit(0x4c,0x8b,0x40,0x18);
+                a.Emit(0x4d,0x85,0xc0);a.J(0x84,"cleanup");
+                a.Emit(0xb9,0x14,0,0,0);
+                a.Emit(0x48,0x89,0xf2);
+                a.Call(sendMessageThunk);
+            }
+            a.Label("cleanup");
             a.Emit(0x48,0x8b,0x06,0x48,0x8b,0x90,0xa0,2,0,0,0x48,0x89,0xf1,0xff,0x90,0x98,2,0,0,0xc7,0x03,0,0,0,0);
             a.Jump("done");a.Label("failed");a.Emit(0xc7,0x03,3,0,0,0);
             a.Label("done");a.Label("return");a.Emit(0x48,0x83,0xc4,0x28,0x5e,0x5b,0xc3);return a.Finish();
+        }
+        internal static byte[] SendHook(long actionData,long returnTarget){
+            Code64 a=new Code64();
+            a.Emit(0x50,0x51,0x52,0x41,0x50,0x41,0x51,0x41,0x52,0x41,0x53,0x9c);
+            a.Rax(actionData);
+            a.Emit(0x48,0x85,0xd2);
+            a.J(0x84,"skip");
+            a.Emit(0x48,0x81,0xfa,0,0,1,0);
+            a.J(0x82,"skip");
+            a.Emit(0x0f,0xb6,0x4a,0x10);
+            a.Emit(0x89,0x08);
+            a.Emit(0xc7,0x40,4,0,0,0,0);
+            a.Emit(0xc7,0x40,8,0,0,0,0);
+            a.Emit(0xc7,0x40,12,0,0,0,0);
+            a.Emit(0x4c,0x8b,0x42,0x20);
+            a.Emit(0x4d,0x85,0xc0);
+            a.J(0x84,"inc_count");
+            a.Emit(0x4d,0x8b,0x40,0x10);
+            a.Emit(0x4d,0x85,0xc0);
+            a.J(0x84,"inc_count");
+            a.Emit(0x41,0x8b,0x48,0x18);
+            a.Emit(0x89,0x48,4);
+            a.Emit(0x85,0xc9);
+            a.J(0x84,"inc_count");
+            a.Emit(0x49,0x8b,0x48,0x20);
+            a.Emit(0x48,0x89,0x48,8);
+            a.Label("inc_count");
+            a.Emit(0xf0,0xff,0x40,0x20);
+            a.Label("skip");
+            a.Emit(0x9d,0x41,0x5b,0x41,0x5a,0x41,0x59,0x41,0x58,0x5a,0x59,0x58);
+            a.Emit(0x48,0x8b,0x02,0x4d,0x8b,0xd0,0x44,0x0f,0xb7,0xc9,0x4c,0x8b,0xda,0x4d,0x03,0xc9);
+            a.Emit(0xff,0x25,0,0,0,0);a.Q(returnTarget);
+            return a.Finish();
         }
     }
 }

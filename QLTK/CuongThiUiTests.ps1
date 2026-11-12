@@ -1,4 +1,4 @@
-﻿if($tabs.TabPages.Count -notin @(26,27,28) -or $cuongThiPage.Text -ne 'Auto Cương Thi' -or !$cuongThiPage.AutoScroll -or !$cuongThiReport.ReadOnly){throw 'Cuong Thi tab missing'}
+﻿if($tabs.TabPages.Count -notin @(26,27,28,29,30) -or $cuongThiPage.Text -ne 'Auto Cương Thi' -or !$cuongThiPage.AutoScroll -or !$cuongThiReport.ReadOnly){throw 'Cuong Thi tab missing'}
 $oldJobs=$script:accountJobs;$oldFns=@{};foreach($n in @('Get-AccountJob','Start-CuongThiJob','Stop-CuongThiJob')){$oldFns[$n]=(Get-Item ('Function:\'+$n)).ScriptBlock}
 try{
  $script:accountJobs=@{};$script:cuongStarts=0;$script:cuongStops=0

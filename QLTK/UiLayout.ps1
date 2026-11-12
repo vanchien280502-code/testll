@@ -1,4 +1,4 @@
-﻿# Compact desktop layout. Existing handlers and account storage stay in AccountManager.ps1.
+# Compact desktop layout. Existing handlers and account storage stay in AccountManager.ps1.
 $form.Text='QLTK - TGLL_minCPU_v2'
 $form.Font=New-Object Drawing.Font('Tahoma',8.25)
 $form.BackColor=[Drawing.Color]::FromArgb(240,240,240)
@@ -317,6 +317,7 @@ Resize-UiLayout;Update-UiSummary
 . (Join-Path $PSScriptRoot 'IzanamiUi.ps1')
 
 . (Join-Path $PSScriptRoot 'AutoItemUi.ps1')
+. (Join-Path $PSScriptRoot 'ItemFilterUi.ps1')
 
 . (Join-Path $PSScriptRoot 'QuestUi.ps1')
 . (Join-Path $PSScriptRoot 'NewbieQuestUi.ps1')
