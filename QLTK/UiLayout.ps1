@@ -1,4 +1,4 @@
-# Compact desktop layout. Existing handlers and account storage stay in AccountManager.ps1.
+﻿# Compact desktop layout. Existing handlers and account storage stay in AccountManager.ps1.
 $form.Text='QLTK - TGLL_minCPU_v2'
 $form.Font=New-Object Drawing.Font('Tahoma',8.25)
 $form.BackColor=[Drawing.Color]::FromArgb(240,240,240)
@@ -72,6 +72,7 @@ $options=Ui-Group 'Tùy chọn' $form
 Ui-Place $autoLoginCheck $options 12 19 170 22
 $autoLoginCheck.Checked=$true;$autoLoginCheck.Enabled=$false
 Ui-Place $show $options 190 19 145 22
+$showHiddenTabsCheck=New-Object Windows.Forms.CheckBox;$showHiddenTabsCheck.Text='Hiện tab ẩn';$showHiddenTabsCheck.AutoSize=$true;Ui-Place $showHiddenTabsCheck $options 345 19 110 22
 $optionHint=Ui-Label 'Nhận chìa: bật trong tab Auto địa cung' $options 12 42 365 20
 $optionHint.ForeColor=[Drawing.Color]::FromArgb(65,65,65)
 $optionHint.Visible=$false
@@ -353,6 +354,45 @@ Resize-UiLayout;Update-UiSummary
 foreach($page in $tabs.TabPages){$page.AutoScroll=$true}
 $grid.Columns['password'].Visible=$show.Checked
 $show.Add_CheckedChanged({$grid.Columns['password'].Visible=$show.Checked})
+$script:hiddenTabTitles=@(
+    'Proxy / Socket',
+    'Nhặt đồ',
+    'Auto gom đồ',
+    'Auto chia đồ',
+    'Auto rương tinh thạch',
+    'Mua áo choàng',
+    'Auto chợ',
+    'Giải mã ảnh',
+    'Auto Cương Thi'
+)
+$script:allMasterTabs=@($tabs.TabPages)
+function Update-TabVisibility {
+    $showAll=[bool]$showHiddenTabsCheck.Checked
+    $selected=$tabs.SelectedTab
+    $tabs.SuspendLayout()
+    try {
+        $tabs.TabPages.Clear()
+        foreach($p in $script:allMasterTabs){
+            if($showAll -or ($script:hiddenTabTitles -notcontains $p.Text)){
+                $null=$tabs.TabPages.Add($p)
+            }
+        }
+        if($selected -and $tabs.TabPages.Contains($selected)){
+            $tabs.SelectedTab=$selected
+        }elseif($tabs.TabPages.Count -gt 0){
+            $tabs.SelectedIndex=0
+        }
+    }finally{
+        $tabs.ResumeLayout()
+    }
+}
+$showHiddenTabsCheck.Checked=[bool]$script:settings.showHiddenTabs
+$showHiddenTabsCheck.Add_CheckedChanged({
+    $script:settings.showHiddenTabs=[bool]$showHiddenTabsCheck.Checked
+    if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}
+    Update-TabVisibility
+})
+Update-TabVisibility
 
 function Initialize-AutoHideUi {
     if($null -ne $script:autoHideAfterLogin){return}

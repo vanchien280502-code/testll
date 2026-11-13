@@ -1,4 +1,4 @@
-$script:uiDragging=$false;$script:uiRefreshPending=$false
+﻿$script:uiDragging=$false;$script:uiRefreshPending=$false
 [TGLL.UiPerformance]::Buffer($form)
 foreach($panel in @($top,$bottom,$tabs,$detailsGroup)){[TGLL.UiPerformance]::Buffer($panel)}
 [TGLL.UiPerformance]::Buffer($inventoryGrid);[TGLL.UiPerformance]::Buffer($marketResultsGrid)
@@ -45,7 +45,6 @@ function Update-ActiveTabUi {
     elseif($selected -eq $distributionPage){Update-DistributionUi}
     elseif($selected -eq $shopGoldPage){if(Get-Command Update-ShopGoldUi -ErrorAction SilentlyContinue){Update-ShopGoldUi}}
     elseif($selected -eq $filterPage){if(Get-Command Update-ItemFilterUi -ErrorAction SilentlyContinue){Update-ItemFilterUi}}
-    elseif($selected -eq $luckyWheelPage){if(Get-Command Update-LuckyWheelUi -ErrorAction SilentlyContinue){Update-LuckyWheelUi}}
     elseif($selected -eq $newbiePage){if(Get-Command Update-NewbieQueueStatus -ErrorAction SilentlyContinue){Update-NewbieQueueStatus}}
 }
 $tabs.Add_SelectedIndexChanged({Update-ActiveTabUi})
@@ -65,7 +64,6 @@ function Invoke-ActivityQueuePhase {
  if(Get-Command Pump-NewbieQueue -ErrorAction SilentlyContinue){Invoke-UiTimedStep 'Pump-NewbieQueue'}
  if(Get-Command Sync-ShopGold -ErrorAction SilentlyContinue){Invoke-UiTimedStep 'Sync-ShopGold'}
  if(Get-Command Sync-ItemFilterPreferences -ErrorAction SilentlyContinue){Invoke-UiTimedStep 'Sync-ItemFilterPreferences'}
- if(Get-Command Sync-LuckyWheelPreferences -ErrorAction SilentlyContinue){Invoke-UiTimedStep 'Sync-LuckyWheelPreferences'}
 }
 function Invoke-UiTimedStep([string]$stepName){
  $clock=[Diagnostics.Stopwatch]::StartNew()
