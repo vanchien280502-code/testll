@@ -28,6 +28,7 @@ function Update-ActiveTabUi {
     if($script:gameSettingPages -contains $selected){Update-GameSettingsUi}
     elseif($selected -eq $soncapPage){Update-SonCapUi}
     elseif($selected -eq $chestPage){Update-StoneChestUi}
+    elseif($selected -eq $wheelPage){Update-LuckyWheelUi}
     elseif($selected -eq $marketPage){Update-MarketUi}
     elseif($selected -eq $gemPage){Update-GemCombineUi}
     elseif($selected -eq $cloakPage){Update-CloakUi}

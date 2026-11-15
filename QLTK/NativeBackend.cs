@@ -1414,6 +1414,14 @@ namespace TGLL {
         public volatile string ChestStatus="Chưa chạy";
         public long ChestBefore,ChestRemaining,ChestUsed;
         internal DateTime ChestAt,ChestPollAt;
+        public volatile bool LuckyWheelEnabled;
+        public volatile int LuckyWheelIntervalMs=1200;
+        public volatile int LuckyWheelTargetCount;
+        public volatile int LuckyWheelSpunCount;
+        public long LuckyWheelTicketsRemaining;
+        public volatile string LuckyWheelStatus="Tắt";
+        internal DateTime LuckyWheelNext=DateTime.MinValue;
+        internal int LuckyWheelPhase=0;
         public volatile bool GoldShopEnabled,GoldShopLockedMode;
         public volatile int GoldShopPhase,GoldShopBoughtTotal,GoldShopCategoryLoaded;
         public volatile string GoldShopStatus="Chưa chạy";
@@ -1448,7 +1456,7 @@ namespace TGLL {
         internal PortalRightOperation SonCapReleaseOperation;internal bool SonCapReleaseAttempted;internal DateTime SonCapAutoRetryAt;internal int SonCapAutoRetries;internal bool SonCapAutoConfirmed,SonCapMapAutoActive;internal int SonCapAutoMap=-1;internal DateTime SonCapAutoSeenAt,SonCapAutoPollAt;
         internal int SonCapClearedStage=-1;internal bool SonCapApplying,SonCapStopPending,SonCapRebound;internal DateTime SonCapPollAt,SonCapMapAt,SonCapEmptyAt,SonCapRouteAt;
         public volatile bool UpRequested;public volatile bool FarmEnabled,FarmArrived,FarmQuietZone;internal bool FarmZoneWaiting;internal volatile bool FarmStopPending;public volatile int CharacterLevel;public volatile string FarmStatus="";public volatile FarmSpot[] FarmObserved=new FarmSpot[0];public volatile int FarmPositionMap=-1,FarmPositionX,FarmPositionY;public DateTime FarmPositionReadAt=DateTime.MinValue;internal FarmSpot[] FarmChoices=new FarmSpot[0];internal FarmSpot FarmTarget;internal bool FarmCharacterMode;internal int FarmLevel;internal DateTime FarmPollAt,FarmRouteAt,FarmStableAt,FarmZoneCheckAt;internal bool FarmRouteSent;
-        public volatile SkillInfo[] Skills=new SkillInfo[0];public volatile bool TrainEnabled,SkillScanRequested=true,TrainReady;public volatile int TrainSkillId=-1,TrainStatus,TrainAttempts,TrainTargetId=-1,TrainTargetHp;public volatile int[] HangingSkillIds=new[]{367,271,285,1};public int HangingSkillCursor;internal bool HangingAwaiting;internal DateTime HangingResultLogAt;internal int HangingLogStatus=Int32.MinValue,HangingLogSkill=-1;public int HangingRequests;internal DateTime LevelOneNextAt;internal int SkillGeneration,TrainCursor;internal bool TrainIdleApplied;public volatile bool ReceiveFlowActive;public volatile int[] TrainSkillIds=new int[0];internal long TaskPacketData;public volatile int TaskPacketOpcode;public volatile int TaskPacketPayload=-1;public volatile int TaskPacketPayload2=-1;public volatile int TaskPacketPayloadType=1;public volatile int MainTaskId=-1,MainStepId=-1,MainRequire=-1;internal long ActionData;public volatile int ActionClickCount;
+        public volatile SkillInfo[] Skills=new SkillInfo[0];public volatile bool TrainEnabled,SkillScanRequested=true,TrainReady;public volatile int TrainSkillId=-1,TrainStatus,TrainAttempts,TrainTargetId=-1,TrainTargetHp;public volatile int[] HangingSkillIds=new[]{367,271,285,1};public int HangingSkillCursor;internal bool HangingAwaiting;internal DateTime HangingResultLogAt;internal int HangingLogStatus=Int32.MinValue,HangingLogSkill=-1;public int HangingRequests;internal DateTime LevelOneNextAt;internal int SkillGeneration,TrainCursor;internal bool TrainIdleApplied;public volatile bool ReceiveFlowActive;public volatile int[] TrainSkillIds=new int[0];internal long TaskPacketData;public volatile int TaskPacketOpcode;public volatile int TaskPacketPayload=-1;public volatile int TaskPacketPayload2=-1;public volatile int TaskPacketPayloadType=1;internal bool TaskPacketInFlight;public volatile int MainTaskId=-1,MainStepId=-1,MainRequire=-1;internal long ActionData;public volatile int ActionClickCount;
 
         public volatile bool GameSettingsReady,GameAutoEnabled,GameAutoWanted;public volatile string GameAutoStatus="Chờ game sẵn sàng";public volatile int EntryAutoActivations;internal int EntryAutoOrigin=-1,EntryAutoKind,EntryCombatMap=-1;internal bool EntryAutoWaiting;internal DateTime EntryAutoAt;public volatile string SettingsError="";
         public volatile GameOption[] GameOptions=new GameOption[0];
@@ -1888,21 +1896,29 @@ namespace TGLL {
             return true;
         }
         internal static void PumpTaskPacket(Remote r,long data,NativeJob j){
-            if(data==0||j.TaskPacketOpcode<=0)return;
+            if(data==0)return;
             int state=BitConverter.ToInt32(r.Read(data,4),0);
+            if(j.TaskPacketInFlight&&(state==0||state==3)){
+                int step=BitConverter.ToInt32(r.Read(data+20,4),0);
+                j.TaskPacketInFlight=false;
+                Log(j,"task_packet_result",",\"state\":"+state+",\"step\":"+step);
+            }
+            if(j.TaskPacketOpcode<=0)return;
             if(state==0){
                 r.Write(data+4,BitConverter.GetBytes(j.TaskPacketOpcode));
-                int payloadType = j.TaskPacketPayload >= 0 ? (j.TaskPacketPayloadType > 0 ? j.TaskPacketPayloadType : 1) : 0;
+                int payloadType = j.TaskPacketPayloadType <= 0 ? 0 : (j.TaskPacketPayload >= 0 ? j.TaskPacketPayloadType : 0);
                 r.Write(data+8,BitConverter.GetBytes(payloadType));
                 if(payloadType > 0)r.Write(data+12,BitConverter.GetBytes(j.TaskPacketPayload));
                 if(j.TaskPacketPayload2 >= 0)r.Write(data+16,BitConverter.GetBytes(j.TaskPacketPayload2));
                 else r.Write(data+16,BitConverter.GetBytes(-1));
+                r.Write(data+20,BitConverter.GetBytes(0));
                 r.Write(data,BitConverter.GetBytes(1));
+                j.TaskPacketInFlight=true;
                 Log(j,"task_packet_sent",",\"opcode\":"+j.TaskPacketOpcode+",\"payload\":"+j.TaskPacketPayload+",\"payload2\":"+j.TaskPacketPayload2+",\"payload_type\":"+payloadType);
                 j.TaskPacketOpcode=0;
                 j.TaskPacketPayload=-1;
                 j.TaskPacketPayload2=-1;
-                j.TaskPacketPayloadType=1;
+                j.TaskPacketPayloadType=0;
             }
         }
         public static void SendTaskPacket(string id,int opcode,int payload=-1,int payloadType=1,int payload2=-1){
@@ -3594,8 +3610,8 @@ namespace TGLL {
                     if(j.CancelRequested&&npcTimer.IsRunning){CancelTravel(keep,j);j.ReceiveKeyEnabled=false;j.DungeonHighEnabled=false;j.IzanamiEnabled=false;j.IzanamiRequested=false;j.DungeonStartAt=DateTime.MinValue;j.ReceiveKeyRequested=false;j.ReplayRequested=false;j.ReceiveFlowActive=false;j.TrainEnabled=false;keep.Write(data,BitConverter.GetBytes(12));npcTimer.Reset();j.State="cancelled";j.Error="cancelled";}
                     if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){PumpActivityRetry(keep,data,questData,j,npcTimer);PumpQuest(keep,questData,j);PumpCuongThiMovement(keep,game,j);PumpCuongThi(keep,game,j);PumpGameSettings(keep,settingsData,j);}
                     PumpThiQuyPriority(keep,game,trainData,j);PumpTraining(keep,trainData,j);PumpActionLog(keep,j);
-                    if(j.TaskPacketOpcode>0||(j.FilterItemEnabled&&j.FilterDropQueue.Count>0)){PumpTaskPacket(keep,taskPacketData,j);if(j.FilterItemEnabled)PumpFilterItem(keep,game,j,null);}
-                    if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){maintenance.Restart();PumpTaskPacket(keep,taskPacketData,j);PumpGemCombine(keep,gemData,game,j,autoItemData:itemData);PumpMarket(keep,marketData,game,j);PumpVitals(keep,game,j);PumpFarm(keep,farmData,game,j);if(j.InboxEnabled||j.InboxBusy)PumpInbox(keep,inboxData,game,j);if(j.MailEnabled||j.MailBusy)PumpMail(keep,mailData,game,j);PumpSonCap(keep,game,farmData,j);PumpSonCapMapAuto(keep,game,data,settingsData,j,npcTimer);PumpIzanamiMapAuto(keep,game,data,j,npcTimer);PumpIzanamiTravel(keep,data,j,npcTimer);if(j.GiftEnabled||j.GiftWaiting||j.GiftResultWaiting)PumpGiftCodes(keep,giftData,game,j);PumpCloak(keep,cloakData,game,j);PumpStoneChest(keep,chestData,itemData,game,j);if(j.GoldShopEnabled)PumpGoldShop(keep,chestData,game,j);PumpAutoItem(keep,itemData,j);if(j.FilterItemEnabled)PumpFilterItem(keep,game,j,null);PumpInventory(keep,game,j);PumpBiMa(keep,game,j);PumpTeam(keep,game,teamData,j);PumpZones(keep,game,teamData+2048,j);PumpFollow(keep,game,teamData+1024,j);
+                    if(j.TaskPacketOpcode>0||(j.FilterItemEnabled&&j.FilterDropQueue.Count>0)||j.LuckyWheelEnabled){PumpTaskPacket(keep,taskPacketData,j);if(j.LuckyWheelEnabled)PumpLuckyWheel(keep,game,j);if(j.FilterItemEnabled)PumpFilterItem(keep,game,j,null);}
+                    if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){maintenance.Restart();PumpTaskPacket(keep,taskPacketData,j);PumpGemCombine(keep,gemData,game,j,autoItemData:itemData);PumpMarket(keep,marketData,game,j);PumpVitals(keep,game,j);PumpFarm(keep,farmData,game,j);if(j.InboxEnabled||j.InboxBusy)PumpInbox(keep,inboxData,game,j);if(j.MailEnabled||j.MailBusy)PumpMail(keep,mailData,game,j);PumpSonCap(keep,game,farmData,j);PumpSonCapMapAuto(keep,game,data,settingsData,j,npcTimer);PumpIzanamiMapAuto(keep,game,data,j,npcTimer);PumpIzanamiTravel(keep,data,j,npcTimer);if(j.GiftEnabled||j.GiftWaiting||j.GiftResultWaiting)PumpGiftCodes(keep,giftData,game,j);PumpCloak(keep,cloakData,game,j);PumpStoneChest(keep,chestData,itemData,game,j);PumpLuckyWheel(keep,game,j);if(j.GoldShopEnabled)PumpGoldShop(keep,chestData,game,j);PumpAutoItem(keep,itemData,j);if(j.FilterItemEnabled)PumpFilterItem(keep,game,j,null);PumpInventory(keep,game,j);PumpBiMa(keep,game,j);PumpTeam(keep,game,teamData,j);PumpZones(keep,game,teamData+2048,j);PumpFollow(keep,game,teamData+1024,j);
                     ReadDiagnostics(keep,data,j);PumpIzanamiAttemptLimit(keep,game,j);PumpDungeonCycle(keep,data,game,j,npcTimer);PumpReceiveKey(keep,data,j,npcTimer,game);if(j.ReplayRequested){Replay(keep,data,j);npcTimer.Restart();}
                     if(j.DynamicMenuConfirmRequested){j.DynamicMenuConfirmRequested=false;keep.Write(data+3296,BitConverter.GetBytes(j.DynamicMenuTargetIndex));keep.Write(data+3280,BitConverter.GetBytes(j.DynamicMenuAction));keep.Write(data,BitConverter.GetBytes(9));npcTimer.Restart();Log(j,"menu_confirm_requested",",\"action\":"+j.DynamicMenuAction+",\"index\":"+j.DynamicMenuTargetIndex);}
                     if(j.NpcQuestRequested&&!j.ReceiveFlowActive){j.NpcQuestRequested=false;int act=j.NpcAction>0?j.NpcAction:4;j.NpcAction=act;j.ReceiveFlowActive=true;j.TrainEnabled=false;j.NpcId=-1;j.NpcTemplateId=-1;keep.Write(data+3296,BitConverter.GetBytes(j.DynamicMenuTargetIndex));keep.Write(data+3280,BitConverter.GetBytes(act));keep.Write(data+28,BitConverter.GetBytes(-1));keep.Write(data+32,new byte[4]);keep.Write(data,BitConverter.GetBytes(8));npcTimer.Restart();j.Stage="npc";j.State="finding_npc";Log(j,"npc_search_start","");}
@@ -3603,7 +3619,7 @@ namespace TGLL {
                         if(state==11){FinishNpcAction(keep,data,j,npcTimer);}
                         else if(npcTimer.ElapsedMilliseconds>60000){j.ReceiveFlowActive=false;j.Error=state==8?(j.NpcAction==2?"onoki_not_found":"npc_not_found"):state==13||state==14||state==15||state==17?"startup_popup_not_ready":(j.NpcAction==2?"npc_izanami_menu_not_ready":j.NpcAction==1?"npc_dungeon_menu_not_ready":"npc_key_menu_not_ready");j.State=j.NpcAction==2?"izanami_unavailable":"npc_unavailable";keep.Write(data,BitConverter.GetBytes(12));npcTimer.Stop();}}
                     }
-                }catch(Exception e){if((DateTime.UtcNow-j.WorkerErrorAt).TotalSeconds>=5){j.WorkerErrorAt=DateTime.UtcNow;Log(j,"worker_error",",\"type\":"+Quote(e.GetType().Name));}}}Thread.Sleep(TrainingPollMs(j));}}catch{}finally{lock(j.MailGate){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus="Game đã thoát";j.MailEnabled=false;j.MailStatus=j.MailBusy?"Game đã thoát khi đang gửi; kiểm tra thư trước khi chạy lại":"Game đã thoát";j.MailBusy=false;}RecordBiMaClosed(j,"process_exit");j.CuongThiEnabled=false;j.CuongThi=null;j.CuongThiNavigationReady=false;j.CuongThiMovementStopping=false;j.CuongThiRouteSent=false;j.CuongThiRouteStatus="Game đã thoát";j.CuongThiRouteData=0;j.CuongThiZoneData=0;j.CuongThiDestination=null;j.CuongThiDestinationKey="";j.CuongThiStatus="Game đã thoát";j.GemEnabled=false;j.GemBusy=false;j.GemItemPause=false;j.GemStatus="Game đã thoát";j.GiftEnabled=false;j.GiftStatus="Game đã thoát";j.QuestEnabled=false;j.QuestPauseAuto=false;j.QuestStatus="Game đã thoát";j.AutoItemEnabled=false;j.AutoItemStatus="Game đã thoát";j.FilterItemEnabled=false;j.FilterItemStatus="Game đã thoát";j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestEnabled=false;j.ChestUseOwned=false;j.ChestStatus=j.ChestPhase==2?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestData=0;j.GoldShopEnabled=false;j.GoldShopStatus="Game đã thoát";j.ThiQuyCombatActive=false;j.ThiQuyPriorityArmed=false;j.ThiQuyNativeMode=0;j.ThiQuyFarmPaused=false;j.ThiQuyReadSuspended=false;j.ThiQuyMissingAt=DateTime.MinValue;j.ThiQuyPriorityAt=DateTime.MinValue;j.CurseActive=false;j.CurseReadAt=DateTime.MinValue;j.ZoneSyncActive=false;j.MapId=-1;j.ZoneId=-1;j.ZoneReadAt=DateTime.MinValue;j.ZonePrepared=false;j.ZoneStatus="";j.FollowActive=false;j.FollowStatus="";j.Vitals=null;j.CharacterName="";j.TeamMembers=new string[0];j.TeamConfirmed=false;j.InventoryScanning=false;j.Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"game_exited",DateTime.MinValue);j.FarmEnabled=false;j.FarmArrived=false;j.FarmStatus="Game đã thoát";j.GameSettingsReady=false;j.GameAutoEnabled=false;j.TrainReady=false;j.TrainEnabled=false;if(keepRelay!=null)keepRelay.Dispose();keep.Dispose();p.Dispose();}});lifetime.IsBackground=true;lifetime.Start();
+                }catch(Exception e){if((DateTime.UtcNow-j.WorkerErrorAt).TotalSeconds>=5){j.WorkerErrorAt=DateTime.UtcNow;Log(j,"worker_error",",\"type\":"+Quote(e.GetType().Name));}}}Thread.Sleep(TrainingPollMs(j));}}catch{}finally{lock(j.MailGate){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus="Game đã thoát";j.MailEnabled=false;j.MailStatus=j.MailBusy?"Game đã thoát khi đang gửi; kiểm tra thư trước khi chạy lại":"Game đã thoát";j.MailBusy=false;}RecordBiMaClosed(j,"process_exit");j.CuongThiEnabled=false;j.CuongThi=null;j.CuongThiNavigationReady=false;j.CuongThiMovementStopping=false;j.CuongThiRouteSent=false;j.CuongThiRouteStatus="Game đã thoát";j.CuongThiRouteData=0;j.CuongThiZoneData=0;j.CuongThiDestination=null;j.CuongThiDestinationKey="";j.CuongThiStatus="Game đã thoát";j.GemEnabled=false;j.GemBusy=false;j.GemItemPause=false;j.GemStatus="Game đã thoát";j.GiftEnabled=false;j.GiftStatus="Game đã thoát";j.QuestEnabled=false;j.QuestPauseAuto=false;j.QuestStatus="Game đã thoát";j.AutoItemEnabled=false;j.AutoItemStatus="Game đã thoát";j.FilterItemEnabled=false;j.FilterItemStatus="Game đã thoát";j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestEnabled=false;j.ChestUseOwned=false;j.ChestStatus=j.ChestPhase==2?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestData=0;j.LuckyWheelEnabled=false;j.LuckyWheelStatus="Game đã thoát";j.GoldShopEnabled=false;j.GoldShopStatus="Game đã thoát";j.ThiQuyCombatActive=false;j.ThiQuyPriorityArmed=false;j.ThiQuyNativeMode=0;j.ThiQuyFarmPaused=false;j.ThiQuyReadSuspended=false;j.ThiQuyMissingAt=DateTime.MinValue;j.ThiQuyPriorityAt=DateTime.MinValue;j.CurseActive=false;j.CurseReadAt=DateTime.MinValue;j.ZoneSyncActive=false;j.MapId=-1;j.ZoneId=-1;j.ZoneReadAt=DateTime.MinValue;j.ZonePrepared=false;j.ZoneStatus="";j.FollowActive=false;j.FollowStatus="";j.Vitals=null;j.CharacterName="";j.TeamMembers=new string[0];j.TeamConfirmed=false;j.InventoryScanning=false;j.Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"game_exited",DateTime.MinValue);j.FarmEnabled=false;j.FarmArrived=false;j.FarmStatus="Game đã thoát";j.GameSettingsReady=false;j.GameAutoEnabled=false;j.TrainReady=false;j.TrainEnabled=false;if(keepRelay!=null)keepRelay.Dispose();keep.Dispose();p.Dispose();}});lifetime.IsBackground=true;lifetime.Start();
             }catch(Exception startupError){
                 bool stopped=true;
                 if(p!=null){try{if(!p.HasExited){p.Kill();stopped=p.WaitForExit(3000);}}catch{stopped=false;}finally{p.Dispose();}}
@@ -4320,6 +4336,77 @@ namespace TGLL {
                 }
             }catch(Exception e){j.ChestStatus="Chờ đọc dữ liệu rương: "+e.Message;if(j.ChestAt!=DateTime.MinValue&&(now-j.ChestAt).TotalSeconds>=30)FinishStoneChest(j,"Dừng để kiểm tra dữ liệu rương; không tự mua lại");}
         }
+        public static void StartLuckyWheel(string id,int intervalMs=1200,int targetCount=0){
+            NativeJob j=Get(id);if(j==null||!j.Auto||j.CloseRequested||j.CancelRequested||!j.TrainReady)throw new Exception("Mở acc và chờ nhân vật vào game trước.");
+            if(intervalMs<50||intervalMs>10000)throw new Exception("Khoảng cách mỗi lần quay từ 50ms đến 10000ms.");
+            if(targetCount<0||targetCount>100000)throw new Exception("Số lượt quay từ 0 (không giới hạn) đến 100000.");
+            j.LuckyWheelIntervalMs=intervalMs;
+            j.LuckyWheelTargetCount=targetCount;
+            j.LuckyWheelSpunCount=0;
+            j.LuckyWheelPhase=0;
+            j.LuckyWheelNext=DateTime.MinValue;
+            j.LuckyWheelStatus="Đang bắt đầu quay...";
+            j.LuckyWheelEnabled=true;
+            Log(j,"lucky_wheel_start",",\"interval_ms\":"+intervalMs+",\"target_count\":"+targetCount);
+        }
+        public static void StopLuckyWheel(string id){
+            NativeJob j=Get(id);if(j==null)return;
+            j.LuckyWheelEnabled=false;
+            j.LuckyWheelPhase=0;
+            string targetStr=j.LuckyWheelTargetCount>0?("/"+j.LuckyWheelTargetCount):"";
+            j.LuckyWheelStatus="Đã dừng (đã quay "+j.LuckyWheelSpunCount+targetStr+" lượt)";
+            Log(j,"lucky_wheel_stop",",\"spun\":"+j.LuckyWheelSpunCount);
+        }
+        public static long LuckyWheelTicketCount(InventorySnapshot bag){
+            if(bag==null||!bag.Ready)return 0;
+            return bag.Items.Where(i=>i.TemplateId==706&&i.Quantity>0).Sum(i=>(long)i.Quantity);
+        }
+        internal static void PumpLuckyWheel(Remote r,long game,NativeJob j,Func<InventorySnapshot> bagReader=null,DateTime? clock=null){
+            if(j==null||!j.LuckyWheelEnabled||j.CloseRequested||j.CancelRequested||j.ReconnectRequested||!j.TrainReady)return;
+            DateTime now=clock??DateTime.UtcNow;
+            if(now<j.LuckyWheelNext||j.TaskPacketOpcode>0)return;
+            try{
+                if(r!=null&&game!=0){
+                    long fcClass=ResolvedClass(r,game+0x16ee888);
+                    long fc=(fcClass!=0)?r.Ptr(r.Ptr(fcClass+0xb8)+16):0;
+                    long popup=(fc!=0)?r.Ptr(fc+0x90):0;
+                    if(popup==0&&fc!=0){
+                        try{
+                            long[] popups=ReadVector(r,r.Ptr(fc+0x88));
+                            if(popups!=null&&popups.Length>0)popup=popups[popups.Length-1];
+                        }catch{}
+                    }
+                    if(popup==0){
+                        j.LuckyWheelStatus="Vui lòng mở giao diện Vòng Quay trên màn hình game";
+                        return;
+                    }
+                }
+
+                if(j.LuckyWheelTargetCount>0&&j.LuckyWheelSpunCount>=j.LuckyWheelTargetCount){
+                    j.LuckyWheelEnabled=false;
+                    j.LuckyWheelPhase=0;
+                    j.LuckyWheelStatus="Đã quay xong "+j.LuckyWheelSpunCount+"/"+j.LuckyWheelTargetCount+" lượt";
+                    Log(j,"lucky_wheel_completed",",\"spun\":"+j.LuckyWheelSpunCount+",\"target\":"+j.LuckyWheelTargetCount);
+                    return;
+                }
+
+                try{
+                    InventorySnapshot bag=bagReader==null?ReadInventorySnapshot(r,game):bagReader();
+                    if(bag!=null&&bag.Ready)j.LuckyWheelTicketsRemaining=LuckyWheelTicketCount(bag);
+                }catch{}
+
+                SendTaskPacket(j.Id,133,payload:171,payloadType:1);
+                j.LuckyWheelSpunCount++;
+                j.LuckyWheelPhase=0;
+                int interval=Math.Max(50,j.LuckyWheelIntervalMs);
+                j.LuckyWheelNext=now.AddMilliseconds(interval);
+                string spunStr=j.LuckyWheelTargetCount>0?("Đang quay... • Đã quay: "+j.LuckyWheelSpunCount+"/"+j.LuckyWheelTargetCount):("Đang quay... • Đã quay: "+j.LuckyWheelSpunCount+" lượt");
+                j.LuckyWheelStatus=spunStr;
+                Log(j,"lucky_wheel_spun",",\"spun\":"+j.LuckyWheelSpunCount+(j.LuckyWheelTargetCount>0?(",\"target\":"+j.LuckyWheelTargetCount):""));
+            }catch(Exception e){
+                j.LuckyWheelStatus="Chờ vòng quay: "+e.Message;
+            }
+        }
     }
     internal static partial class NativeCode {
         internal static byte[] StoneChest(long data,long game){return StoneChestCore(data,game+0x16ee820,game+0x16f760,game+0x2e2aa0,game+0x1dd900,game+0x4e6b00);}
@@ -4333,13 +4420,41 @@ namespace TGLL {
             a.Emit(0x48,0x8b,0x06,0x48,0x8b,0x90,0xa0,2,0,0,0x48,0x89,0xf1,0xff,0x90,0x98,2,0,0,0xc7,0x43,24,3,0,0,0);
             a.Label("sent");a.Emit(0xff,0x43,16);a.Label("done");a.Emit(0xc7,0x03,0,0,0,0);a.Label("return");a.Emit(0x48,0x83,0xc4,0x28,0x5e,0x5b,0xc3);return a.Finish();
         }
-        internal static byte[] TaskPacket(long data,long game){return TaskPacketCore(data,game+0x16ee820,game+0x16f760,game+0x2e2aa0,game+0x1dd900,game+0x16ee888,game+0x4340);}
-        internal static byte[] TaskPacketCore(long data,long serviceSlot,long allocate,long ctor,long initialize,long sessionSlot=0,long sendMessageThunk=0){
-            Code64 a=new Code64();a.Emit(0x53,0x56,0x48,0x83,0xec,0x28,0x48,0xbb);a.Q(data);
-            a.Emit(0x83,0x3b,1);a.J(0x85,"return");a.Emit(0xc7,0x03,2,0,0,0);
-            Slot(a,serviceSlot,"failed",initialize);a.Emit(0x48,0x89,0xc1);a.Call(allocate);
-            a.Emit(0x48,0x85,0xc0);a.J(0x84,"failed");
-            a.Emit(0x48,0x89,0xc6,0x48,0x89,0xc1,0x8b,0x53,4,0x45,0x33,0xc0);a.Call(ctor);
+        internal static byte[] TaskPacket(long data,long game){return TaskPacketCore(data,game+0x16ee820,game+0x16f760,game+0x2e2aa0,game+0x1dd900,game+0x16ee888,game+0x4340,game+0x48f0,game+0x374ad0);}
+        internal static byte[] TaskPacketCore(long data,long serviceSlot,long allocate,long ctor,long initialize,long sessionSlot=0,long sendMessageThunk=0,long ensureClassInit=0,long performAction=0){
+            Code64 a=new Code64();
+            a.Emit(0x53,0x56,0x48,0x83,0xec,0x28,0x48,0xbb);a.Q(data);
+            a.Emit(0x83,0x3b,1);a.J(0x85,"return");
+            a.Emit(0xc7,0x03,2,0,0,0);
+            a.Emit(0xc7,0x43,20,1,0,0,0);
+
+            if(performAction!=0&&sessionSlot!=0){
+                a.Emit(0x83,0x7b,8,99);a.J(0x84,"dialog_action");
+            }
+
+            string msgReady="msg_ready_"+a.Bytes.Count;
+            a.Rax(serviceSlot);
+            a.Emit(0x48,0x8b,0x00);
+            a.Emit(0x48,0x85,0xc0);a.J(0x84,"err_102");
+            a.Emit(0xa8,0x01);a.J(0x84,msgReady);
+            a.Rcx(serviceSlot);a.Call(initialize);
+            a.Rax(serviceSlot);a.Emit(0x48,0x8b,0x00);
+            a.Emit(0x48,0x85,0xc0);a.J(0x84,"err_102");
+            a.Emit(0xa8,0x01);a.J(0x85,"err_102");
+            a.Label(msgReady);
+            a.Emit(0xc7,0x43,20,2,0,0,0);
+
+            a.Emit(0x48,0x89,0xc1);a.Call(allocate);
+            a.Emit(0x48,0x85,0xc0);a.J(0x84,"err_103");
+            a.Emit(0x48,0x89,0xc6);
+            a.Emit(0xc7,0x43,20,3,0,0,0);
+
+            a.Emit(0x48,0x89,0xf1);
+            a.Emit(0x8b,0x53,4);
+            a.Emit(0x45,0x33,0xc0);
+            a.Call(ctor);
+            a.Emit(0xc7,0x43,20,4,0,0,0);
+
             a.Emit(0x83,0x7b,8,0);a.J(0x84,"send");
             a.Emit(0x83,0x7b,8,2);a.J(0x84,"write_short");
             a.Emit(0x83,0x7b,8,3);a.J(0x84,"turnin_item");
@@ -4362,32 +4477,119 @@ namespace TGLL {
             a.Emit(0x48,0x8b,0x06,0x4c,0x8b,0x80,0x50,2,0,0,0x48,0x89,0xf1,0x8b,0x53,12,0xff,0x90,0x48,2,0,0);
             a.Emit(0x48,0x8b,0x06,0x4c,0x8b,0x80,0x20,2,0,0,0x48,0x89,0xf1,0x8b,0x53,16,0xff,0x90,0x18,2,0,0);
             a.Label("send");
+            a.Emit(0xc7,0x43,20,5,0,0,0);
+
             if(sessionSlot!=0&&sendMessageThunk!=0){
+                string sessReady="sess_ready_"+a.Bytes.Count;
                 a.Rax(sessionSlot);
                 a.Emit(0x48,0x8b,0x00);
-                a.Emit(0x48,0x85,0xc0);a.J(0x84,"cleanup");
-                if(initialize!=0){
-                    string ready="init_ready_"+a.Bytes.Count;
-                    a.Emit(0x83,0xb8,0xe0,0,0,0,0);
-                    a.J(0x85,ready);
+                a.Emit(0x48,0x85,0xc0);a.J(0x84,"err_106");
+                a.Emit(0xa8,0x01);a.J(0x84,sessReady);
+                a.Rcx(sessionSlot);a.Call(initialize);
+                a.Rax(sessionSlot);a.Emit(0x48,0x8b,0x00);
+                a.Emit(0x48,0x85,0xc0);a.J(0x84,"err_106");
+                a.Emit(0xa8,0x01);a.J(0x85,"err_106");
+                a.Label(sessReady);
+                a.Emit(0xc7,0x43,20,6,0,0,0);
+
+                if(ensureClassInit!=0){
                     a.Emit(0x48,0x89,0xc1);
-                    a.Call(initialize);
-                    a.Rax(sessionSlot);a.Emit(0x48,0x8b,0x00);
-                    a.Emit(0x48,0x85,0xc0);a.J(0x84,"cleanup");
-                    a.Label(ready);
+                    a.Call(ensureClassInit);
                 }
+                a.Emit(0xc7,0x43,20,7,0,0,0);
+
+                a.Rax(sessionSlot);a.Emit(0x48,0x8b,0x00);
                 a.Emit(0x48,0x8b,0x80,0xb8,0,0,0);
-                a.Emit(0x48,0x85,0xc0);a.J(0x84,"cleanup");
+                a.Emit(0x48,0x85,0xc0);a.J(0x84,"err_108");
+                a.Emit(0xc7,0x43,20,8,0,0,0);
+
                 a.Emit(0x4c,0x8b,0x40,0x18);
-                a.Emit(0x4d,0x85,0xc0);a.J(0x84,"cleanup");
+                a.Emit(0x4d,0x85,0xc0);a.J(0x84,"err_109");
+                a.Emit(0xc7,0x43,20,9,0,0,0);
+
                 a.Emit(0xb9,0x14,0,0,0);
                 a.Emit(0x48,0x89,0xf2);
+                a.Emit(0xc7,0x43,20,10,0,0,0);
                 a.Call(sendMessageThunk);
+                a.Emit(0xc7,0x43,20,11,0,0,0);
             }
+
             a.Label("cleanup");
-            a.Emit(0x48,0x8b,0x06,0x48,0x8b,0x90,0xa0,2,0,0,0x48,0x89,0xf1,0xff,0x90,0x98,2,0,0,0xc7,0x03,0,0,0,0);
-            a.Jump("done");a.Label("failed");a.Emit(0xc7,0x03,3,0,0,0);
-            a.Label("done");a.Label("return");a.Emit(0x48,0x83,0xc4,0x28,0x5e,0x5b,0xc3);return a.Finish();
+            a.Emit(0x48,0x8b,0x06,0x48,0x8b,0x90,0xa0,2,0,0,0x48,0x89,0xf1,0xff,0x90,0x98,2,0,0);
+            a.Emit(0xc7,0x43,20,12,0,0,0);
+            a.Emit(0xc7,0x03,0,0,0,0);
+            a.Jump("return");
+
+            if(performAction!=0&&sessionSlot!=0){
+                a.Label("dialog_action");
+                a.Emit(0xc7,0x43,20,10,0,0,0);
+                Slot(a,sessionSlot,"err_no_popup",initialize);
+                a.Emit(0x48,0x8b,0x80,0xb8,0,0,0);
+                a.Emit(0x48,0x85,0xc0);a.J(0x84,"err_no_popup");
+                a.Emit(0x48,0x8b,0x48,16);
+                a.Emit(0x48,0x85,0xc9);a.J(0x84,"err_no_popup");
+                a.Emit(0x48,0x8b,0x81,0x90,0,0,0);
+                a.Emit(0x48,0x85,0xc0);a.J(0x85,"has_popup");
+                a.Emit(0x48,0x8b,0x81,0x88,0,0,0);
+                a.Emit(0x48,0x85,0xc0);a.J(0x84,"err_no_popup");
+                a.Emit(0x48,0x8b,0x40,16);
+                a.Emit(0x48,0x85,0xc0);a.J(0x84,"err_no_popup");
+                a.Emit(0x8b,0x50,24);
+                a.Emit(0x85,0xd2);a.J(0x8e,"err_no_popup");
+                a.Emit(0x48,0x8b,0x48,16);
+                a.Emit(0x48,0x85,0xc9);a.J(0x84,"err_no_popup");
+                a.Emit(0xff,0xca);
+                a.Emit(0x48,0x63,0xd2);
+                a.Emit(0x48,0x8b,0x44,0xd1,32);
+                a.Emit(0x48,0x85,0xc0);a.J(0x84,"err_no_popup");
+                a.Label("has_popup");
+                a.Emit(0x48,0x89,0xc1);
+                a.Emit(0x8b,0x53,4);
+                a.Emit(0x45,0x31,0xc0);
+                a.Call(performAction);
+                a.Emit(0xb8,1,0,0,0);
+
+                a.Label("dlg_action_done");
+                a.Emit(0x89,0x43,20);
+                a.Emit(0xc7,0x03,0,0,0,0);
+                a.Jump("return");
+                a.Label("err_no_popup");
+                a.Emit(0xc7,0x43,20,105,0,0,0);
+                a.Emit(0xc7,0x03,3,0,0,0);
+                a.Jump("return");
+            }
+
+            a.Label("err_102");
+            a.Emit(0xc7,0x43,20,102,0,0,0);
+            a.Emit(0xc7,0x03,3,0,0,0);
+            a.Jump("return");
+
+            a.Label("err_103");
+            a.Emit(0xc7,0x43,20,103,0,0,0);
+            a.Emit(0xc7,0x03,3,0,0,0);
+            a.Jump("return");
+
+            a.Label("err_106");
+            a.Emit(0xc7,0x43,20,106,0,0,0);
+            a.Jump("cleanup_err");
+
+            a.Label("err_108");
+            a.Emit(0xc7,0x43,20,108,0,0,0);
+            a.Jump("cleanup_err");
+
+            a.Label("err_109");
+            a.Emit(0xc7,0x43,20,109,0,0,0);
+            a.Jump("cleanup_err");
+
+            a.Label("cleanup_err");
+            a.Emit(0x48,0x85,0xf6);a.J(0x84,"mark_failed");
+            a.Emit(0x48,0x8b,0x06,0x48,0x8b,0x90,0xa0,2,0,0,0x48,0x89,0xf1,0xff,0x90,0x98,2,0,0);
+            a.Label("mark_failed");
+            a.Emit(0xc7,0x03,3,0,0,0);
+
+            a.Label("return");
+            a.Emit(0x48,0x83,0xc4,0x28,0x5e,0x5b,0xc3);
+            return a.Finish();
         }
         internal static byte[] SendHook(long actionData,long returnTarget){
             Code64 a=new Code64();

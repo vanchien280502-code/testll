@@ -1,5 +1,5 @@
 ﻿$newbiePage = New-Object Windows.Forms.TabPage
-$newbiePage.Text = 'Auto Tan thu'
+$newbiePage.Text = 'Auto Lv 10'
 $newbiePage.BackColor = $form.BackColor
 $tabs.TabPages.Add($newbiePage)
 
@@ -29,7 +29,8 @@ $newbieCloseAfter.Text = 'Tu tat game sau khi dat Lv 10'
 $newbieCloseAfter.SetBounds(16, 112, 620, 25)
 if ($null -ne $script:settings.newbieCloseAfter) {
     $newbieCloseAfter.Checked = [bool]$script:settings.newbieCloseAfter
-} else {
+}
+else {
     $newbieCloseAfter.Checked = $true
 }
 $newbiePage.Controls.Add($newbieCloseAfter)
@@ -37,7 +38,8 @@ $newbiePage.Controls.Add($newbieCloseAfter)
 $newbieQueueStart = Ui-NewButton 'Xep hang tan thu da chon' {
     try {
         Add-NewbieQueue @((Get-LaunchRows) | ForEach-Object { $_.Tag })
-    } catch {
+    }
+    catch {
         Show-Error $_.Exception.Message
     }
 }
@@ -90,19 +92,20 @@ function Update-NewbieUi {
         $newbieHint.Text = "Cap hien tai: Lv $lvl / Yeu cau: Lv 10`r`n"
         $newbieHint.Text += "Lo trinh tu dong: 9 nhiem vu chinh tuyen (Task 0 -> 8)`r`n"
         $newbieHint.Text += "Dich den: Dat Lv 10 & xin nhap hoc tai Truong Konoha."
-    } finally {
+    }
+    finally {
         $script:loadingNewbie = $false
     }
 }
 
 $newbieCheck.Add_CheckedChanged({
-    if ($script:loadingNewbie -or !$grid.SelectedRows.Count) { return }
-    $a = $grid.SelectedRows[0].Tag
-    if ($null -eq $a) { return }
-    $a | Add-Member NoteProperty autoNewbie $newbieCheck.Checked -Force
-    if (!$UiTest) { Save-Accounts }
-    Update-NewbieUi
-})
+        if ($script:loadingNewbie -or !$grid.SelectedRows.Count) { return }
+        $a = $grid.SelectedRows[0].Tag
+        if ($null -eq $a) { return }
+        $a | Add-Member NoteProperty autoNewbie $newbieCheck.Checked -Force
+        if (!$UiTest) { Save-Accounts }
+        Update-NewbieUi
+    })
 
 $grid.Add_SelectionChanged({ Update-NewbieUi })
 Update-NewbieUi

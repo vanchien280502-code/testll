@@ -1,19 +1,20 @@
 using System;
 using System.IO;
 
-public class Program {
-    public static void Main() {
-        byte[] b = File.ReadAllBytes(@"TGLL_minCPU_v2\GameAssembly.dll");
-        // find pointers to 0x16C3A18 or start of vtable
-        // vtable start is somewhere around 0x16C3000
-        for (int i = 0; i <= b.Length - 8; i += 8) {
-            long val = BitConverter.ToInt64(b, i);
-            long rva = val - 0x180000000L;
-            if (rva >= 0x16C3000 && rva <= 0x16C4000) {
-                // vtable pointer in an Il2CppClass or instance
-                Console.WriteLine(string.Format("Pointer to 0x{0:X} at file 0x{1:X}", rva, i));
+class Program {
+    static void Main() {
+        byte[] bytes = File.ReadAllBytes(@"TGLL_minCPU_v2\GameAssembly.dll");
+        int target = 0x16C2080;
+        long target64 = 0x180000000L + target;
+        byte[] b = BitConverter.GetBytes(target64);
+        Console.WriteLine("Searching for pointer to 0x{0:X}...", target);
+        for (int i = 0; i < bytes.Length - 8; i++) {
+            bool ok = true;
+            for (int k = 0; k < 8; k++) if (bytes[i+k] != b[k]) { ok = false; break; }
+            if (ok) {
+                int rva = (i - 0x235600) + 0x237000;
+                Console.WriteLine("  Found at RVA 0x{0:X}", rva);
             }
         }
     }
 }
-
